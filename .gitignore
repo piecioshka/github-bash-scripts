@@ -1,16 +1,1 @@
-# Local
 tmp/
-.DS_Store
-.vscode/
-.idea/
-*.swp
-
-# Outputs from bin/ scripts
-scan-results/
-pages-links-*.txt
-repo-links-*.txt
-homepages-*.txt
-homepages-repos-*.txt
-broken-homepages-*.txt
-broken-homepages-repos-*.txt
-search-*.txt

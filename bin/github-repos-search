@@ -6,15 +6,17 @@
 #   github-repos-search -u <user> -q <query> -F               # include forks
 #   github-repos-search -u <user> -q <query> -c               # case-sensitive
 #   github-repos-search -u <user> -q <query> -E               # treat query as regex
-#   github-repos-search -u <user> -q <query> -o out.txt       # custom output
+#   github-repos-search -u <user> -q <query> -o                # also save repo URLs to auto-named file
+#   github-repos-search -u <user> -q <query> -o out.txt       # also save repo URLs to a specific file
 #   github-repos-search --help                                # show help
 #
 # Searches across repo metadata (name, description, homepage, topics, language).
 # Case-insensitive substring match by default. Use -E to interpret the query as
 # an extended regex. Use -c for case-sensitive matching.
 #
-# Output (stdout): one row per matched field, grouped by repo (sorted).
-# Output (file): unique list of repo URLs, one per line.
+# By default prints matched rows to stdout only. Pass -o to also save unique
+# repo URLs — bare -o generates <PWD>/search-<user>-<query>_<timestamp>.txt,
+# -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated), jq
 
@@ -55,8 +57,11 @@ while [[ $# -gt 0 ]]; do
         -E|--regex)
             REGEX=1; shift ;;
         -o|--output)
-            [[ -z "${2:-}" ]] && { echo "ERROR: --output requires a path" >&2; exit 1; }
-            OUTPUT_FILE="$2"; shift 2 ;;
+            if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+                OUTPUT_FILE="__AUTO__"; shift 1
+            else
+                OUTPUT_FILE="$2"; shift 2
+            fi ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)
@@ -83,7 +88,7 @@ case "$VISIBILITY" in
     *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
 esac
 
-if [[ -z "$OUTPUT_FILE" ]]; then
+if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
     # sanitize query for filename (keep alphanumeric, dash, underscore)
     SAFE_Q=$(echo "$QUERY" | tr -c '[:alnum:]_-' '_' | sed 's/__*/_/g; s/^_//; s/_$//')
@@ -108,7 +113,7 @@ echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
 echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
 echo "${C_BOLD}Query:${C_RESET}       $QUERY"
 echo "${C_BOLD}Match:${C_RESET}       $([[ $CASE_SENSITIVE == 1 ]] && echo case-sensitive || echo case-insensitive) / $([[ $REGEX == 1 ]] && echo regex || echo substring)"
-echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
 echo
 
 # Fetch metadata for all repos as (slug \t field \t value) triples
@@ -144,7 +149,7 @@ matches=$(echo "$triples" | awk -F'\t' '{print $3 "\t" $0}' \
 
 if [[ -z "$matches" ]]; then
     echo "No matches across $total_repos repos."
-    : > "$OUTPUT_FILE"
+    [[ -n "$OUTPUT_FILE" ]] && : > "$OUTPUT_FILE"
     exit 0
 fi
 
@@ -160,10 +165,14 @@ echo "$matches" | sort | while IFS=$'\t' read -r slug field value; do
 done
 echo
 
-# Save unique repo URLs to file
-echo "$matches" | cut -f1 | sort -u \
-    | awk '{print "https://github.com/" $0}' > "$OUTPUT_FILE"
+# Build unique list of matched repo URLs
+urls=$(echo "$matches" | cut -f1 | sort -u \
+    | awk '{print "https://github.com/" $0}')
 
-matched_repos=$(wc -l < "$OUTPUT_FILE" | tr -d ' ')
+matched_repos=$(echo "$urls" | grep -c . || true)
 echo "${C_BOLD}Found $matched_repos/$total_repos repos matching '$QUERY'.${C_RESET}"
-echo "Written to: $OUTPUT_FILE"
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$urls" > "$OUTPUT_FILE"
+    echo "Written to: $OUTPUT_FILE"
+fi

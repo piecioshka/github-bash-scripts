@@ -41,11 +41,14 @@ scripts.
   - `-f, --file <path>` — input file
   - `-v, --visibility public|private|all` — visibility filter (default: `all`)
   - `-F, --include-forks` — include forks (default: excluded)
-  - `-o, --output <path>` — override output file
+  - `-o, --output [<path>]` — opt-in: also save results to a file (default:
+    stdout only). With `<path>` writes to that exact path; bare `-o` (or
+    followed by another flag) generates `<name>_YYYY-MM-DD_HH-mm-ss.<ext>`
+    in `$PWD`
   - `-h, --help` — show usage
 - Destructive scripts must support `DRY_RUN=1` to preview actions
-- Output filenames use `<name>_YYYY-MM-DD_HH-mm-ss.<ext>` and default to
-  `$PWD`, never the script's directory
+- `list`/`search` scripts print results to stdout only; file output is opt-in
+  via `-o [<path>]`
 - Colored columnar output only when stdout is a TTY (check `[[ -t 1 ]]`)
 - Lines in input files starting with `#` are treated as comments and ignored
 

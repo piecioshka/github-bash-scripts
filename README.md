@@ -1,5 +1,7 @@
 # github-bash-scripts
 
+[![github-ci](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml)
+
 Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages and secrets.
 
 All scripts live in [`bin/`](bin/). Most share the same conventions:
@@ -11,18 +13,23 @@ All scripts live in [`bin/`](bin/). Most share the same conventions:
 - `-F/--include-forks` — include forks (default: excluded)
 - `DRY_RUN=1` — preview without making changes (for destructive actions)
 - Colored columnar output when writing to a TTY
-- Output files default to `$PWD` with timestamp `<name>_YYYY-MM-DD_HH-mm-ss.<ext>`
+- `list`/`search` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
 
 Run any script with `--help` to see its full usage.
 
 ## Installation
 
 ```bash
+cd ~/projects
+
 git clone https://github.com/piecioshka/github-bash-scripts.git
 cd github-bash-scripts
 
-# Ensure scripts are executable (usually already set)
-chmod +x bin/*
+# Bash: please add to `~/.bash_profile`
+export PATH="$HOME/projects/github-bash-scripts/bin/:$PATH"
+
+# Fish: please add to `~/.config/fish/config.fish`
+set -gx PATH $HOME/projects/github-bash-scripts/bin/ $PATH
 
 # Authenticate the GitHub CLI once
 gh auth login
@@ -40,13 +47,14 @@ brew install gitleaks   # only if you plan to use bin/github-repos-scan-secrets
 ### Read / list
 
 ```bash
-# List repos that have GitHub Pages enabled (writes URL list to file)
+# List repos that have GitHub Pages enabled
 github-pages-list -u piecioshka
 github-pages-list -u piecioshka -v public
 github-pages-list -u piecioshka -v private
 github-pages-list -u piecioshka -F                       # include forks
 github-pages-list -u piecioshka -r                       # output repo URLs instead of Pages URLs
-github-pages-list -u piecioshka -o my-pages.txt          # custom output path
+github-pages-list -u piecioshka -o                       # also save to auto-named file in $PWD
+github-pages-list -u piecioshka -o my-pages.txt          # also save to a specific file
 CONCURRENCY=20 github-pages-list -u piecioshka
 
 # List repos that have a non-empty website/homepage set
@@ -55,13 +63,16 @@ github-homepage-list -u piecioshka -v public
 github-homepage-list -u piecioshka -v private
 github-homepage-list -u piecioshka -F
 github-homepage-list -u piecioshka -r                    # output repo URLs
-github-homepage-list -u piecioshka -o my-homepages.txt
+github-homepage-list -u piecioshka -o                    # also save to auto-named file in $PWD
+github-homepage-list -u piecioshka -o my-homepages.txt   # also save to a specific file
 
 # List repos whose homepage URL is broken (non-2xx/3xx)
 github-homepage-list-broken -u piecioshka
 github-homepage-list-broken -u piecioshka -v public
 github-homepage-list-broken -u piecioshka -F
 github-homepage-list-broken -u piecioshka -r             # output repo URLs (chainable)
+github-homepage-list-broken -u piecioshka -o             # also save to auto-named file in $PWD
+github-homepage-list-broken -u piecioshka -o broken.txt  # also save to a specific file
 CONCURRENCY=20 TIMEOUT=30 github-homepage-list-broken -u piecioshka
 
 # Search across repo metadata (name, description, homepage, topics, language)
@@ -70,7 +81,8 @@ github-repos-search -u piecioshka -q angular -v public
 github-repos-search -u piecioshka -q angular -F
 github-repos-search -u piecioshka -q TypeScript -c       # case-sensitive
 github-repos-search -u piecioshka -q '^workshop-.*2019' -E   # regex
-github-repos-search -u piecioshka -q react -o matches.txt
+github-repos-search -u piecioshka -q react -o               # also save repo URLs to auto-named file
+github-repos-search -u piecioshka -q react -o matches.txt   # also save repo URLs to a specific file
 ```
 
 ### Audit (secrets)

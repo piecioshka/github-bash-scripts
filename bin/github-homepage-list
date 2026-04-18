@@ -4,13 +4,15 @@
 #   github-homepage-list -u <username> -v public          # only public
 #   github-homepage-list -u <username> -v private         # only private
 #   github-homepage-list -u <username> -F                 # include forks
-#   github-homepage-list -u <username> -r                 # save repo URLs (github.com/owner/repo)
-#   github-homepage-list -u <username> -o out.txt         # custom output file
+#   github-homepage-list -u <username> -r                 # output repo URLs (github.com/owner/repo)
+#   github-homepage-list -u <username> -o                 # also save URLs to auto-named file in $PWD
+#   github-homepage-list -u <username> -o out.txt         # also save URLs to a specific file
 #   github-homepage-list --help                           # show help
 #
-# Lists repositories that have a non-empty website/homepage URL and writes them
-# to a file (one URL per line). Default mode: homepage URLs.
-# With -r / --repo-url: repository URLs instead.
+# Lists repositories that have a non-empty website/homepage URL. Default mode:
+# homepage URLs. With -r / --repo-url: repository URLs instead.
+# By default prints to stdout only. Pass -o to also save a file — bare -o
+# generates <PWD>/homepages-<user>_<timestamp>.txt, -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated)
 
@@ -44,8 +46,11 @@ while [[ $# -gt 0 ]]; do
         -r|--repo-url)
             OUTPUT_MODE="repo"; shift ;;
         -o|--output)
-            [[ -z "${2:-}" ]] && { echo "ERROR: --output requires a path" >&2; exit 1; }
-            OUTPUT_FILE="$2"; shift 2 ;;
+            if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+                OUTPUT_FILE="__AUTO__"; shift 1
+            else
+                OUTPUT_FILE="$2"; shift 2
+            fi ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)
@@ -69,7 +74,7 @@ case "$VISIBILITY" in
     *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
 esac
 
-if [[ -z "$OUTPUT_FILE" ]]; then
+if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
     if [[ "$OUTPUT_MODE" == "homepage" ]]; then
         OUTPUT_FILE="$PWD/homepages-$GH_USER""_$TIMESTAMP.txt"
@@ -97,7 +102,7 @@ echo "${C_BOLD}User:${C_RESET}       $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET} $VISIBILITY"
 echo "${C_BOLD}Forks:${C_RESET}      $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
 echo "${C_BOLD}Mode:${C_RESET}       $OUTPUT_MODE"
-echo "${C_BOLD}Output:${C_RESET}     $OUTPUT_FILE"
+[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}     $OUTPUT_FILE"
 echo
 
 # Fetch all repos with homepage in one API call (no per-repo roundtrips)
@@ -111,7 +116,7 @@ total=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
 
 if [[ -z "$results" ]]; then
     echo "No repos with a homepage set."
-    : > "$OUTPUT_FILE"
+    [[ -n "$OUTPUT_FILE" ]] && : > "$OUTPUT_FILE"
     exit 0
 fi
 
@@ -121,15 +126,19 @@ while IFS=$'\t' read -r slug url; do
     printf "${C_GREEN}✓${C_RESET} %-50s ${C_DIM}→${C_RESET} %s\n" "$slug" "$url"
 done <<< "$(echo "$results" | sort)"
 
-# Save URLs to file
+# Build unique URL list
 if [[ "$OUTPUT_MODE" == "repo" ]]; then
-    echo "$results" | cut -f1 | grep -v '^$' | sort -u \
-        | awk '{print "https://github.com/" $0}' > "$OUTPUT_FILE"
+    urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
+        | awk '{print "https://github.com/" $0}')
 else
-    echo "$results" | cut -f2 | grep -v '^$' | sort -u > "$OUTPUT_FILE"
+    urls=$(echo "$results" | cut -f2 | grep -v '^$' | sort -u)
 fi
 
-found=$(wc -l < "$OUTPUT_FILE" | tr -d ' ')
+found=$(echo "$urls" | grep -c . || true)
 echo
 echo "${C_BOLD}Found $found/$total repos with a homepage set.${C_RESET}"
-echo "Written to: $OUTPUT_FILE"
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$urls" > "$OUTPUT_FILE"
+    echo "Written to: $OUTPUT_FILE"
+fi
