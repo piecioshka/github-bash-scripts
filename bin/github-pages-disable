@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-pages-disable -f links.txt                    # repos from a file
+#   echo "https://github.com/o/r" | github-pages-disable # repos from stdin
+#   DRY_RUN=1 github-pages-disable -f links.txt          # show what would be done
+#   github-pages-disable --help                          # show help
+#
+# Disables GitHub Pages for each repo on the list.
+#
+# Actions per repo (in order):
+#   1. Delete the Pages source branch (usually 'gh-pages') — stops the site serving.
+#   2. Try DELETE /repos/.../pages — often returns 422 for legacy setups; non-fatal.
+#
+# Accepts both URL formats (one per line, lines starting with # are ignored):
+#   - https://github.com/owner/repo
+#   - https://owner.github.io/repo/
+#
+# WARNING: branch deletion is destructive — the source branch is removed.
+# Requires: gh CLI (authenticated) with admin access on the repos.
+
+set -u
+
+DRY_RUN="${DRY_RUN:-0}"
+INPUT_FILE=""
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--file)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --file requires a path" >&2; exit 1; }
+            INPUT_FILE="$2"; shift 2 ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use -f <file> or --help)" >&2; exit 1 ;;
+    esac
+done
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'
+    C_RED=$'\033[31m'; C_DIM=$'\033[90m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""
+fi
+
+paint_status() {
+    local status="$1"
+    local padded
+    printf -v padded "%-6s" "$status"
+    case "$status" in
+        OK)   printf "%s%s%s" "$C_GREEN"  "$padded" "$C_RESET" ;;
+        DRY)  printf "%s%s%s" "$C_YELLOW" "$padded" "$C_RESET" ;;
+        NONE) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        FAIL) printf "%s%s%s" "$C_RED"    "$padded" "$C_RESET" ;;
+        SKIP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        *)    printf "%s" "$padded" ;;
+    esac
+}
+
+print_row() {
+    local status="$1"
+    local repo="$2"
+    local details="${3:-}"
+    printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
+}
+
+# Converts any supported URL to owner/repo slug.
+# Supports:
+#   https://github.com/owner/repo[/]
+#   https://owner.github.io/repo[/]
+url_to_slug() {
+    local url="$1"
+    # strip whitespace
+    url="${url#"${url%%[![:space:]]*}"}"
+    url="${url%"${url##*[![:space:]]}"}"
+    # github.com/owner/repo
+    if [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
+        local owner="${BASH_REMATCH[1]}"
+        local repo="${BASH_REMATCH[2]}"
+        repo="${repo%.git}"
+        echo "$owner/$repo"
+        return
+    fi
+    # <user>.github.io/<repo>
+    if [[ "$url" =~ ^https?://([^./]+)\.github\.io/([^/]+) ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return
+    fi
+    echo ""
+}
+
+disable_pages() {
+    local url="$1"
+    local slug
+    slug=$(url_to_slug "$url")
+
+    if [[ -z "$slug" ]]; then
+        print_row "SKIP" "$url" "unrecognized URL"
+        return
+    fi
+
+    # Check if Pages enabled and fetch source branch
+    local branch
+    if ! branch=$(gh api "repos/$slug/pages" --jq '.source.branch // "gh-pages"' 2>/dev/null); then
+        print_row "NONE" "$slug" "Pages not enabled"
+        return
+    fi
+
+    # SAFETY: only 'gh-pages' is allowed to be deleted. Never touch main/master/etc.
+    if [[ "$branch" != "gh-pages" ]]; then
+        print_row "SKIP" "$slug" "Pages source is '$branch' (not 'gh-pages') — refusing to delete"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        print_row "DRY" "$slug" "would delete branch 'gh-pages' + try Pages API DELETE"
+        return
+    fi
+
+    local notes
+
+    # 1. Delete 'gh-pages' branch — effectively disables the site
+    if gh api -X DELETE "repos/$slug/git/refs/heads/gh-pages" > /dev/null 2>&1; then
+        notes="branch 'gh-pages' deleted"
+    else
+        notes="branch 'gh-pages' delete failed"
+    fi
+
+    # 2. Try Pages API DELETE — best effort, may return 422 for legacy sites
+    if gh api --method DELETE "repos/$slug/pages" > /dev/null 2>&1; then
+        notes="$notes + Pages API disabled"
+    else
+        notes="$notes + Pages API refused (expected)"
+    fi
+
+    if [[ "$notes" == "branch '"*"' deleted"* ]]; then
+        print_row "OK" "$slug" "$notes"
+    else
+        print_row "FAIL" "$slug" "$notes"
+    fi
+}
+
+input_source() {
+    if [[ -n "$INPUT_FILE" ]]; then
+        if [[ ! -f "$INPUT_FILE" ]]; then
+            echo "ERROR: file does not exist: $INPUT_FILE" >&2
+            exit 1
+        fi
+        echo "${C_BOLD}Source:${C_RESET} file $INPUT_FILE" >&2
+        cat "$INPUT_FILE"
+        return
+    fi
+
+    if [[ ! -t 0 ]]; then
+        echo "${C_BOLD}Source:${C_RESET} stdin" >&2
+        cat
+        return
+    fi
+
+    show_usage
+    exit 1
+}
+
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
+
+input_source \
+    | grep -vE '^[[:space:]]*(#|$)' \
+    | grep -Eo 'https?://[^ ]+' \
+    | while read -r url; do
+        disable_pages "$url"
+    done

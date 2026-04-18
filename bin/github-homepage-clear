@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-homepage-clear -u <username>                    # all non-fork repos of a user
+#   github-homepage-clear -u <username> -v public          # only public
+#   github-homepage-clear -u <username> -v private         # only private
+#   github-homepage-clear -u <username> -F                 # include forks
+#   github-homepage-clear -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-homepage-clear  # repos from stdin
+#   github-homepage-clear -u <username> --force            # clear ANY homepage (not only *.github.io)
+#   DRY_RUN=1 github-homepage-clear -u <username>          # show what would be done
+#   github-homepage-clear --help                           # show help
+#
+# For each repo on the list: if the repo's website/homepage URL points to a
+# *.github.io address, clears it. Repos whose homepage is something else
+# (or empty) are skipped — unless --force is used, which clears ANY non-empty
+# homepage.
+#
+# Accepts both URL formats (one per line, lines starting with # are ignored):
+#   - https://github.com/owner/repo
+#   - https://owner.github.io/repo/
+#
+# Requires: gh CLI (authenticated) with admin access on the repos.
+
+set -u
+
+DRY_RUN="${DRY_RUN:-0}"
+INPUT_FILE=""
+GH_USER=""
+VISIBILITY="all"
+INCLUDE_FORKS=0
+FORCE=0
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--file)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --file requires a path" >&2; exit 1; }
+            INPUT_FILE="$2"; shift 2 ;;
+        -u|--user)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --user requires a username" >&2; exit 1; }
+            GH_USER="$2"; shift 2 ;;
+        -v|--visibility)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --visibility requires a value" >&2; exit 1; }
+            VISIBILITY="$2"; shift 2 ;;
+        -F|--include-forks)
+            INCLUDE_FORKS=1; shift ;;
+        --force)
+            FORCE=1; shift ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use -f <file>, -u <user>, --force or --help)" >&2; exit 1 ;;
+    esac
+done
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+
+case "$VISIBILITY" in
+    public|private|all) ;;
+    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
+esac
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'
+    C_RED=$'\033[31m'; C_DIM=$'\033[90m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""
+fi
+
+paint_status() {
+    local status="$1"
+    local padded
+    printf -v padded "%-6s" "$status"
+    case "$status" in
+        OK)   printf "%s%s%s" "$C_GREEN"  "$padded" "$C_RESET" ;;
+        DRY)  printf "%s%s%s" "$C_YELLOW" "$padded" "$C_RESET" ;;
+        KEEP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        FAIL) printf "%s%s%s" "$C_RED"    "$padded" "$C_RESET" ;;
+        SKIP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        *)    printf "%s" "$padded" ;;
+    esac
+}
+
+print_row() {
+    local status="$1"
+    local repo="$2"
+    local details="${3:-}"
+    printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
+}
+
+url_to_slug() {
+    local url="$1"
+    url="${url#"${url%%[![:space:]]*}"}"
+    url="${url%"${url##*[![:space:]]}"}"
+    if [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
+        local repo="${BASH_REMATCH[2]%.git}"
+        echo "${BASH_REMATCH[1]}/$repo"
+        return
+    fi
+    if [[ "$url" =~ ^https?://([^./]+)\.github\.io/([^/]+) ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return
+    fi
+    echo ""
+}
+
+clear_homepage() {
+    local url="$1"
+    local slug
+    slug=$(url_to_slug "$url")
+
+    if [[ -z "$slug" ]]; then
+        print_row "SKIP" "$url" "unrecognized URL"
+        return
+    fi
+
+    local homepage
+    if ! homepage=$(gh api "repos/$slug" --jq '.homepage // ""' 2>/dev/null); then
+        print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
+        return
+    fi
+
+    if [[ -z "$homepage" ]]; then
+        print_row "KEEP" "$slug" "homepage already empty"
+        return
+    fi
+
+    # Only clear if homepage points to *.github.io, unless --force
+    if [[ "$FORCE" != "1" && ! "$homepage" =~ ^https?://[^/]+\.github\.io(/|$) ]]; then
+        print_row "KEEP" "$slug" "homepage not *.github.io: $homepage (use --force to override)"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        local note="would clear homepage ($homepage)"
+        [[ "$FORCE" == "1" ]] && note="$note [forced]"
+        print_row "DRY" "$slug" "$note"
+        return
+    fi
+
+    local out
+    if out=$(gh repo edit "$slug" --homepage "" 2>&1); then
+        print_row "OK" "$slug" "cleared (was: $homepage)"
+    else
+        print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
+    fi
+}
+
+input_source() {
+    if [[ -n "$INPUT_FILE" ]]; then
+        if [[ ! -f "$INPUT_FILE" ]]; then
+            echo "ERROR: file does not exist: $INPUT_FILE" >&2
+            exit 1
+        fi
+        echo "${C_BOLD}Source:${C_RESET} file $INPUT_FILE" >&2
+        cat "$INPUT_FILE"
+        return
+    fi
+
+    if [[ -n "$GH_USER" ]]; then
+        local vis_args=()
+        [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
+        local jq_filter='.[]'
+        [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
+        jq_filter="$jq_filter | .nameWithOwner"
+
+        local fork_note="(forks excluded)"
+        [[ "$INCLUDE_FORKS" == "1" ]] && fork_note="(forks included)"
+        echo "${C_BOLD}Source:${C_RESET} gh repo list $GH_USER --visibility $VISIBILITY $fork_note" >&2
+        gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+            --json nameWithOwner,isFork --jq "$jq_filter" \
+            | sed 's#^#https://github.com/#'
+        return
+    fi
+
+    if [[ ! -t 0 ]]; then
+        echo "${C_BOLD}Source:${C_RESET} stdin" >&2
+        cat
+        return
+    fi
+
+    show_usage
+    exit 1
+}
+
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
+[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode — will clear ANY homepage ==${C_RESET}"
+
+input_source \
+    | grep -vE '^[[:space:]]*(#|$)' \
+    | grep -Eo 'https?://[^ ]+' \
+    | while read -r url; do
+        clear_homepage "$url"
+    done

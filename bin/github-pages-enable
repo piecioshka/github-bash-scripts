@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-pages-enable -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-pages-enable  # repos from stdin
+#   BRANCH=gh-pages github-pages-enable -f links.txt     # custom source branch
+#   BRANCH=main PATH_IN_REPO=/docs github-pages-enable -f links.txt
+#   DRY_RUN=1 github-pages-enable -f links.txt           # show what would be done
+#   github-pages-enable --help                           # show help
+#
+# Enables GitHub Pages for each repo on the list. Repos that already have
+# Pages enabled are reported as HAVE and left untouched.
+#
+# Accepts both URL formats (one per line, lines starting with # are ignored):
+#   - https://github.com/owner/repo
+#   - https://owner.github.io/repo/
+#
+# Env:
+#   BRANCH          Pages source branch (default: main)
+#   PATH_IN_REPO    Pages source path   (default: /)
+#
+# Requires: gh CLI (authenticated) with admin access on the repos.
+
+set -u
+
+DRY_RUN="${DRY_RUN:-0}"
+BRANCH="${BRANCH:-main}"
+PATH_IN_REPO="${PATH_IN_REPO:-/}"
+INPUT_FILE=""
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--file)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --file requires a path" >&2; exit 1; }
+            INPUT_FILE="$2"; shift 2 ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use -f <file> or --help)" >&2; exit 1 ;;
+    esac
+done
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'
+    C_RED=$'\033[31m'; C_DIM=$'\033[90m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""
+fi
+
+paint_status() {
+    local status="$1"
+    local padded
+    printf -v padded "%-6s" "$status"
+    case "$status" in
+        OK)   printf "%s%s%s" "$C_GREEN"  "$padded" "$C_RESET" ;;
+        DRY)  printf "%s%s%s" "$C_YELLOW" "$padded" "$C_RESET" ;;
+        HAVE) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        FAIL) printf "%s%s%s" "$C_RED"    "$padded" "$C_RESET" ;;
+        SKIP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        *)    printf "%s" "$padded" ;;
+    esac
+}
+
+print_row() {
+    local status="$1"
+    local repo="$2"
+    local details="${3:-}"
+    printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
+}
+
+url_to_slug() {
+    local url="$1"
+    url="${url#"${url%%[![:space:]]*}"}"
+    url="${url%"${url##*[![:space:]]}"}"
+    if [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
+        local repo="${BASH_REMATCH[2]%.git}"
+        echo "${BASH_REMATCH[1]}/$repo"
+        return
+    fi
+    if [[ "$url" =~ ^https?://([^./]+)\.github\.io/([^/]+) ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return
+    fi
+    echo ""
+}
+
+enable_pages() {
+    local url="$1"
+    local slug
+    slug=$(url_to_slug "$url")
+
+    if [[ -z "$slug" ]]; then
+        print_row "SKIP" "$url" "unrecognized URL"
+        return
+    fi
+
+    if gh api "repos/$slug/pages" > /dev/null 2>&1; then
+        print_row "HAVE" "$slug" "Pages already enabled"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        print_row "DRY" "$slug" "would enable Pages ($BRANCH$PATH_IN_REPO)"
+        return
+    fi
+
+    local out
+    if out=$(gh api --method POST "repos/$slug/pages" \
+        -f "source[branch]=$BRANCH" \
+        -f "source[path]=$PATH_IN_REPO" 2>&1); then
+        print_row "OK" "$slug" "Pages enabled ($BRANCH$PATH_IN_REPO)"
+    else
+        print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
+    fi
+}
+
+input_source() {
+    if [[ -n "$INPUT_FILE" ]]; then
+        if [[ ! -f "$INPUT_FILE" ]]; then
+            echo "ERROR: file does not exist: $INPUT_FILE" >&2
+            exit 1
+        fi
+        echo "${C_BOLD}Source:${C_RESET} file $INPUT_FILE" >&2
+        cat "$INPUT_FILE"
+        return
+    fi
+
+    if [[ ! -t 0 ]]; then
+        echo "${C_BOLD}Source:${C_RESET} stdin" >&2
+        cat
+        return
+    fi
+
+    show_usage
+    exit 1
+}
+
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
+
+input_source \
+    | grep -vE '^[[:space:]]*(#|$)' \
+    | grep -Eo 'https?://[^ ]+' \
+    | while read -r url; do
+        enable_pages "$url"
+    done
