@@ -50,6 +50,7 @@ scripts.
 - `list`/`search` scripts print results to stdout only; file output is opt-in
   via `-o [<path>]`
 - Colored columnar output only when stdout is a TTY (check `[[ -t 1 ]]`)
+- Repo state badges (`[🔐 private]` yellow, `[🍴 fork]` blue, `[📦 archived]` brown) — appended to TTY output for non-default states only, and must never leak into `-o` output files (which stay as plain URL lists for chaining)
 - Lines in input files starting with `#` are treated as comments and ignored
 
 ## Local verification

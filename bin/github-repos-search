@@ -99,10 +99,11 @@ fi
 # colors (tty only)
 if [[ -t 1 ]]; then
     C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'
-    C_CYAN=$'\033[36m'; C_DIM=$'\033[90m'
+    C_GREEN=$'\033[32m'; C_CYAN=$'\033[36m'; C_DIM=$'\033[90m'
+    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
 else
     C_RESET=""; C_BOLD=""; C_GREEN=""; C_CYAN=""; C_DIM=""
+    C_YELLOW=""; C_BLUE=""; C_BROWN=""
 fi
 
 vis_args=()
@@ -116,23 +117,31 @@ echo "${C_BOLD}Match:${C_RESET}       $([[ $CASE_SENSITIVE == 1 ]] && echo case-
 [[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
 echo
 
-# Fetch metadata for all repos as (slug \t field \t value) triples
+# Fetch metadata for all repos in a single API call, then run two jq passes:
+#   - triples: (slug \t field \t value) for substring/regex search
+#   - meta:    (slug \t visibility \t isFork \t isArchived) lookup for badges
 fork_filter='true'
 [[ "$INCLUDE_FORKS" == "0" ]] && fork_filter='.isFork == false'
 
-triples=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-    --json nameWithOwner,description,homepageUrl,repositoryTopics,primaryLanguage,isFork \
-    --jq "
-        .[] | select($fork_filter) |
-        . as \$r |
-        [
-            [\$r.nameWithOwner, \"name\",        \$r.nameWithOwner],
-            [\$r.nameWithOwner, \"description\", (\$r.description // \"\")],
-            [\$r.nameWithOwner, \"homepage\",    (\$r.homepageUrl // \"\")],
-            [\$r.nameWithOwner, \"topics\",      ((\$r.repositoryTopics // []) | map(.name) | join(\",\"))],
-            [\$r.nameWithOwner, \"language\",    (\$r.primaryLanguage.name // \"\")]
-        ][] | select(.[2] != \"\") | @tsv
-    ")
+repos_json=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+    --json nameWithOwner,description,homepageUrl,repositoryTopics,primaryLanguage,isFork,isArchived,visibility)
+
+triples=$(echo "$repos_json" | jq -r "
+    .[] | select($fork_filter) |
+    . as \$r |
+    [
+        [\$r.nameWithOwner, \"name\",        \$r.nameWithOwner],
+        [\$r.nameWithOwner, \"description\", (\$r.description // \"\")],
+        [\$r.nameWithOwner, \"homepage\",    (\$r.homepageUrl // \"\")],
+        [\$r.nameWithOwner, \"topics\",      ((\$r.repositoryTopics // []) | map(.name) | join(\",\"))],
+        [\$r.nameWithOwner, \"language\",    (\$r.primaryLanguage.name // \"\")]
+    ][] | select(.[2] != \"\") | @tsv
+")
+
+meta_tsv=$(echo "$repos_json" | jq -r "
+    .[] | select($fork_filter) |
+    [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv
+")
 
 total_repos=$(echo "$triples" | cut -f1 | sort -u | wc -l | tr -d ' ')
 
@@ -154,11 +163,22 @@ if [[ -z "$matches" ]]; then
 fi
 
 # Pretty print — group by slug
+lookup_badges() {
+    local slug="$1" line vis is_fork is_archived badges=""
+    line=$(echo "$meta_tsv" | awk -F'\t' -v s="$slug" '$1==s {print; exit}')
+    [[ -z "$line" ]] && return
+    IFS=$'\t' read -r _ vis is_fork is_archived <<< "$line"
+    [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
+    [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
+    [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+    printf "%s" "$badges"
+}
+
 current_slug=""
 echo "$matches" | sort | while IFS=$'\t' read -r slug field value; do
     if [[ "$slug" != "$current_slug" ]]; then
         [[ -n "$current_slug" ]] && echo
-        printf "${C_BOLD}${C_CYAN}%s${C_RESET}\n" "$slug"
+        printf "${C_BOLD}${C_CYAN}%s${C_RESET}%s\n" "$slug" "$(lookup_badges "$slug")"
         current_slug="$slug"
     fi
     printf "  ${C_GREEN}%-12s${C_RESET} ${C_DIM}|${C_RESET} %s\n" "$field" "$value"

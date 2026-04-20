@@ -87,8 +87,10 @@ fi
 if [[ -t 1 ]]; then
     C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
     C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
+    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
 else
     C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
+    C_YELLOW=""; C_BLUE=""; C_BROWN=""
 fi
 
 vis_args=()
@@ -96,7 +98,7 @@ vis_args=()
 
 jq_filter='.[]'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
-jq_filter="$jq_filter | select(.homepageUrl != null and .homepageUrl != \"\") | \"\(.nameWithOwner)\t\(.homepageUrl)\""
+jq_filter="$jq_filter | select(.homepageUrl != null and .homepageUrl != \"\") | [.nameWithOwner, .homepageUrl, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
 
 echo "${C_BOLD}User:${C_RESET}       $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET} $VISIBILITY"
@@ -107,7 +109,7 @@ echo
 
 # Fetch all repos with homepage in one API call (no per-repo roundtrips)
 results=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-    --json nameWithOwner,isFork,homepageUrl --jq "$jq_filter")
+    --json nameWithOwner,isFork,isArchived,visibility,homepageUrl --jq "$jq_filter")
 
 total=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
     --json nameWithOwner,isFork --jq "$(
@@ -121,12 +123,16 @@ if [[ -z "$results" ]]; then
 fi
 
 # pretty print (sorted by slug)
-while IFS=$'\t' read -r slug url; do
+while IFS=$'\t' read -r slug url vis is_fork is_archived; do
     [[ -z "$slug" ]] && continue
-    printf "${C_GREEN}✓${C_RESET} %-50s ${C_DIM}→${C_RESET} %s\n" "$slug" "$url"
+    badges=""
+    [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
+    [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
+    [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+    printf "${C_GREEN}✓${C_RESET} %-50s ${C_DIM}→${C_RESET} %s%s\n" "$slug" "$url" "$badges"
 done <<< "$(echo "$results" | sort)"
 
-# Build unique URL list
+# Build unique URL list (slug = col 1, homepage = col 2)
 if [[ "$OUTPUT_MODE" == "repo" ]]; then
     urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
         | awk '{print "https://github.com/" $0}')

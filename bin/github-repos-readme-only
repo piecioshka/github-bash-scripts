@@ -85,8 +85,10 @@ fi
 if [[ -t 1 ]]; then
     C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
     C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
+    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
 else
     C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
+    C_YELLOW=""; C_BLUE=""; C_BROWN=""
 fi
 
 vis_args=()
@@ -94,7 +96,7 @@ vis_args=()
 
 jq_filter='.[]'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
-jq_filter="$jq_filter | .nameWithOwner"
+jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
 
 echo "${C_BOLD}User:${C_RESET}        $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
@@ -104,7 +106,7 @@ echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
 echo
 
 repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-    --json nameWithOwner,isFork --jq "$jq_filter")
+    --json nameWithOwner,visibility,isFork,isArchived --jq "$jq_filter")
 
 if [[ -z "$repos" ]]; then
     echo "No repos match the filter."
@@ -117,27 +119,33 @@ echo "Checking $total repos for README-only contents..."
 echo
 
 check_readme_only() {
-    local slug="$1"
+    local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
     local files
     files=$(gh api "repos/$slug/git/trees/HEAD?recursive=1" \
         --jq '[.tree[] | select(.type=="blob") | .path]' 2>/dev/null)
     if [[ "$files" == '["README.md"]' ]]; then
-        echo "$slug"
+        printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
     fi
 }
 export -f check_readme_only
 
-results=$(echo "$repos" \
-    | xargs -n 1 -P "$CONCURRENCY" -I {} bash -c 'check_readme_only "$@"' _ {})
+# Note: TSV fields are passed as separate positional args — BSD xargs collapses
+# tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
+results=$(echo "$repos" | tr '\t' ' ' \
+    | xargs -n 4 -P "$CONCURRENCY" bash -c 'check_readme_only "$@"' _)
 
 if [[ -n "$results" ]]; then
-    while IFS= read -r slug; do
+    while IFS=$'\t' read -r slug vis is_fork is_archived; do
         [[ -z "$slug" ]] && continue
-        printf "${C_GREEN}✓${C_RESET} %s\n" "$slug"
+        badges=""
+        [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
+        [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
+        [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        printf "${C_GREEN}✓${C_RESET} %s%s\n" "$slug" "$badges"
     done <<< "$(echo "$results" | sort)"
 fi
 
-urls=$(echo "$results" | grep -v '^$' | sort -u \
+urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
     | awk '{print "https://github.com/" $0}')
 
 found=$(echo "$urls" | grep -c . || true)

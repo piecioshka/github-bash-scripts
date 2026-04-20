@@ -13,6 +13,7 @@ All scripts live in [`bin/`](bin/). Most share the same conventions:
 - `-F/--include-forks` — include forks (default: excluded)
 - `DRY_RUN=1` — preview without making changes (for destructive actions)
 - Colored columnar output when writing to a TTY
+- Repo state badges on TTY: `[🔐 private]` (yellow), `[🍴 fork]` (blue), `[📦 archived]` (brown) — shown only for non-default states, never written to `-o` output files
 - `list`/`search` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
 
 Run any script with `--help` to see its full usage.
