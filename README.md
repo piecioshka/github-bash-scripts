@@ -84,6 +84,16 @@ github-repos-readme-only -u piecioshka -o                # also save repo URLs t
 github-repos-readme-only -u piecioshka -o readme.txt     # also save repo URLs to a specific file
 CONCURRENCY=20 github-repos-readme-only -u piecioshka
 
+# List repos that have a given branch (default: gh-pages)
+github-repos-with-branch -u piecioshka
+github-repos-with-branch -u piecioshka -b main
+github-repos-with-branch -u piecioshka -b develop -v public
+github-repos-with-branch -u piecioshka -F
+github-repos-with-branch -u piecioshka -r                # output repo URLs instead of branch URLs
+github-repos-with-branch -u piecioshka -o                # also save to auto-named file in $PWD
+github-repos-with-branch -u piecioshka -o branches.txt   # also save to a specific file
+CONCURRENCY=20 github-repos-with-branch -u piecioshka
+
 # Search across repo metadata (name, description, homepage, topics, language)
 github-repos-search -u piecioshka -q angular
 github-repos-search -u piecioshka -q angular -v public

@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-repos-with-branch -u <username>                     # default branch: gh-pages (forks excluded)
+#   github-repos-with-branch -u <username> -b <branch>         # custom branch name
+#   github-repos-with-branch -u <username> -b main             # e.g. repos that still have 'main'
+#   github-repos-with-branch -u <username> -v public           # only public
+#   github-repos-with-branch -u <username> -v private          # only private
+#   github-repos-with-branch -u <username> -F                  # include forks
+#   github-repos-with-branch -u <username> -r                  # output repo URLs (github.com/owner/repo)
+#   github-repos-with-branch -u <username> -o                  # also save URLs to auto-named file in $PWD
+#   github-repos-with-branch -u <username> -o branches.txt     # also save URLs to a specific file
+#   github-repos-with-branch --help                            # show help
+#
+# Lists repositories that have the given branch (default: gh-pages).
+# Default output: branch URLs (github.com/owner/repo/tree/<branch>).
+# With -r / --repo-url: repository URLs.
+# By default prints to stdout only. Pass -o to also save a file — bare -o
+# generates <PWD>/<mode>-<branch>-branch-<user>_<timestamp>.txt,
+# -o <path> uses that path.
+#
+# Requires: gh CLI (authenticated)
+
+set -u
+
+GH_USER=""
+BRANCH="gh-pages"
+VISIBILITY="all"
+INCLUDE_FORKS=0
+OUTPUT_FILE=""
+OUTPUT_MODE="branch"    # branch | repo
+CONCURRENCY="${CONCURRENCY:-10}"
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--user)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --user requires a username" >&2; exit 1; }
+            GH_USER="$2"; shift 2 ;;
+        -b|--branch)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --branch requires a branch name" >&2; exit 1; }
+            BRANCH="$2"; shift 2 ;;
+        -v|--visibility)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --visibility requires a value" >&2; exit 1; }
+            VISIBILITY="$2"; shift 2 ;;
+        -F|--include-forks)
+            INCLUDE_FORKS=1; shift ;;
+        -r|--repo-url)
+            OUTPUT_MODE="repo"; shift ;;
+        -o|--output)
+            if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+                OUTPUT_FILE="__AUTO__"; shift 1
+            else
+                OUTPUT_FILE="$2"; shift 2
+            fi ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use --help)" >&2; exit 1 ;;
+    esac
+done
+
+if [[ -z "$GH_USER" ]]; then
+    echo "ERROR: -u <user> is required" >&2
+    show_usage
+    exit 1
+fi
+
+if [[ -z "$BRANCH" ]]; then
+    echo "ERROR: branch name cannot be empty" >&2
+    exit 1
+fi
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+
+case "$VISIBILITY" in
+    public|private|all) ;;
+    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
+esac
+
+# Sanitize branch for filenames (slashes → dashes).
+BRANCH_SAFE="${BRANCH//\//-}"
+
+if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
+    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    OUTPUT_FILE="$PWD/${OUTPUT_MODE}-${BRANCH_SAFE}-branch-$GH_USER""_$TIMESTAMP.txt"
+fi
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
+    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
+    C_YELLOW=""; C_BLUE=""; C_BROWN=""
+fi
+
+vis_args=()
+[[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
+
+jq_filter='.[]'
+[[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
+jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
+
+echo "${C_BOLD}User:${C_RESET}        $GH_USER"
+echo "${C_BOLD}Branch:${C_RESET}      $BRANCH"
+echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
+echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+echo "${C_BOLD}Mode:${C_RESET}        $OUTPUT_MODE"
+echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
+[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+echo
+
+repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+    --json nameWithOwner,isFork,isArchived,visibility --jq "$jq_filter")
+
+if [[ -z "$repos" ]]; then
+    echo "No repos match the filter."
+    [[ -n "$OUTPUT_FILE" ]] && : > "$OUTPUT_FILE"
+    exit 0
+fi
+
+total=$(echo "$repos" | wc -l | tr -d ' ')
+echo "Checking $total repos for '$BRANCH' branch..."
+echo
+
+check_branch() {
+    local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
+    local branch_name target_branch="$TARGET_BRANCH"
+    if branch_name=$(gh api "repos/$slug/branches/$target_branch" --jq '.name' 2>/dev/null) \
+        && [[ "$branch_name" == "$target_branch" ]]; then
+        printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
+    fi
+}
+export -f check_branch
+export TARGET_BRANCH="$BRANCH"
+
+# TSV fields passed as separate args (BSD xargs collapses tabs inside -I {}).
+results=$(echo "$repos" | tr '\t' ' ' \
+    | xargs -n 4 -P "$CONCURRENCY" bash -c 'check_branch "$@"' _)
+
+# Pretty print
+if [[ -n "$results" ]]; then
+    while IFS=$'\t' read -r slug vis is_fork is_archived; do
+        [[ -z "$slug" ]] && continue
+        badges=""
+        [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
+        [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
+        [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        printf "${C_GREEN}✓${C_RESET} %-50s ${C_DIM}→${C_RESET} https://github.com/%s/tree/%s%s\n" "$slug" "$slug" "$BRANCH" "$badges"
+    done <<< "$(echo "$results" | sort)"
+fi
+
+if [[ "$OUTPUT_MODE" == "repo" ]]; then
+    urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
+        | awk '{print "https://github.com/" $0}')
+else
+    urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
+        | awk -v b="$BRANCH" '{print "https://github.com/" $0 "/tree/" b}')
+fi
+
+found=$(echo "$urls" | grep -c . || true)
+echo
+echo "${C_BOLD}Found $found/$total repos with '$BRANCH' branch.${C_RESET}"
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$urls" > "$OUTPUT_FILE"
+    echo "Written to: $OUTPUT_FILE"
+fi
