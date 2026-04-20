@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-repos-readme-only -u <username>                   # all repos (forks excluded)
+#   github-repos-readme-only -u <username> -v public         # only public
+#   github-repos-readme-only -u <username> -v private        # only private
+#   github-repos-readme-only -u <username> -F                # include forks
+#   github-repos-readme-only -u <username> -o                # also save URLs to auto-named file in $PWD
+#   github-repos-readme-only -u <username> -o out.txt        # also save URLs to a specific file
+#   github-repos-readme-only --help                          # show help
+#
+# Lists repositories whose HEAD tree contains exactly a single file: README.md.
+# Useful for finding placeholder or abandoned repos.
+# By default prints repo slugs to stdout. Pass -o to also save repo URLs —
+# bare -o generates <PWD>/readme-only-<user>_<timestamp>.txt, -o <path> uses
+# that path.
+#
+# Requires: gh CLI (authenticated), jq
+
+set -u
+
+GH_USER=""
+VISIBILITY="all"
+INCLUDE_FORKS=0
+OUTPUT_FILE=""
+CONCURRENCY="${CONCURRENCY:-10}"
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--user)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --user requires a username" >&2; exit 1; }
+            GH_USER="$2"; shift 2 ;;
+        -v|--visibility)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --visibility requires a value" >&2; exit 1; }
+            VISIBILITY="$2"; shift 2 ;;
+        -F|--include-forks)
+            INCLUDE_FORKS=1; shift ;;
+        -o|--output)
+            if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+                OUTPUT_FILE="__AUTO__"; shift 1
+            else
+                OUTPUT_FILE="$2"; shift 2
+            fi ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use --help)" >&2; exit 1 ;;
+    esac
+done
+
+if [[ -z "$GH_USER" ]]; then
+    echo "ERROR: -u <user> is required" >&2
+    show_usage
+    exit 1
+fi
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+if ! command -v jq > /dev/null 2>&1; then
+    echo "ERROR: jq not found. Install with: brew install jq" >&2
+    exit 1
+fi
+
+case "$VISIBILITY" in
+    public|private|all) ;;
+    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
+esac
+
+if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
+    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    OUTPUT_FILE="$PWD/readme-only-$GH_USER""_$TIMESTAMP.txt"
+fi
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
+fi
+
+vis_args=()
+[[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
+
+jq_filter='.[]'
+[[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
+jq_filter="$jq_filter | .nameWithOwner"
+
+echo "${C_BOLD}User:${C_RESET}        $GH_USER"
+echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
+echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
+[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+echo
+
+repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+    --json nameWithOwner,isFork --jq "$jq_filter")
+
+if [[ -z "$repos" ]]; then
+    echo "No repos match the filter."
+    [[ -n "$OUTPUT_FILE" ]] && : > "$OUTPUT_FILE"
+    exit 0
+fi
+
+total=$(echo "$repos" | wc -l | tr -d ' ')
+echo "Checking $total repos for README-only contents..."
+echo
+
+check_readme_only() {
+    local slug="$1"
+    local files
+    files=$(gh api "repos/$slug/git/trees/HEAD?recursive=1" \
+        --jq '[.tree[] | select(.type=="blob") | .path]' 2>/dev/null)
+    if [[ "$files" == '["README.md"]' ]]; then
+        echo "$slug"
+    fi
+}
+export -f check_readme_only
+
+results=$(echo "$repos" \
+    | xargs -n 1 -P "$CONCURRENCY" -I {} bash -c 'check_readme_only "$@"' _ {})
+
+if [[ -n "$results" ]]; then
+    while IFS= read -r slug; do
+        [[ -z "$slug" ]] && continue
+        printf "${C_GREEN}✓${C_RESET} %s\n" "$slug"
+    done <<< "$(echo "$results" | sort)"
+fi
+
+urls=$(echo "$results" | grep -v '^$' | sort -u \
+    | awk '{print "https://github.com/" $0}')
+
+found=$(echo "$urls" | grep -c . || true)
+echo
+echo "${C_BOLD}${C_DIM}Found $found/$total repos containing only README.md.${C_RESET}"
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$urls" > "$OUTPUT_FILE"
+    echo "Written to: $OUTPUT_FILE"
+fi

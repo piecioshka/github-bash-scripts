@@ -75,6 +75,14 @@ github-homepage-list-broken -u piecioshka -o             # also save to auto-nam
 github-homepage-list-broken -u piecioshka -o broken.txt  # also save to a specific file
 CONCURRENCY=20 TIMEOUT=30 github-homepage-list-broken -u piecioshka
 
+# List repos that contain only a single README.md file (placeholders)
+github-repos-readme-only -u piecioshka
+github-repos-readme-only -u piecioshka -v public
+github-repos-readme-only -u piecioshka -F
+github-repos-readme-only -u piecioshka -o                # also save repo URLs to auto-named file
+github-repos-readme-only -u piecioshka -o readme.txt     # also save repo URLs to a specific file
+CONCURRENCY=20 github-repos-readme-only -u piecioshka
+
 # Search across repo metadata (name, description, homepage, topics, language)
 github-repos-search -u piecioshka -q angular
 github-repos-search -u piecioshka -q angular -v public
