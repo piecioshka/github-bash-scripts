@@ -5,7 +5,7 @@
 #   github-homepage-list-broken -u <username> -v private   # only private
 #   github-homepage-list-broken -u <username> -F           # include forks
 #   github-homepage-list-broken -u <username> -r           # output repo URLs (github.com/owner/repo)
-#   github-homepage-list-broken -u <username> -o            # also save URLs to auto-named file in $PWD
+#   github-homepage-list-broken -u <username> -o           # also save URLs to auto-named file in $PWD
 #   github-homepage-list-broken -u <username> -o out.txt   # also save URLs to a specific file
 #   github-homepage-list-broken --help                     # show help
 #

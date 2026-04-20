@@ -6,7 +6,7 @@
 #   github-repos-search -u <user> -q <query> -F               # include forks
 #   github-repos-search -u <user> -q <query> -c               # case-sensitive
 #   github-repos-search -u <user> -q <query> -E               # treat query as regex
-#   github-repos-search -u <user> -q <query> -o                # also save repo URLs to auto-named file
+#   github-repos-search -u <user> -q <query> -o               # also save repo URLs to auto-named file
 #   github-repos-search -u <user> -q <query> -o out.txt       # also save repo URLs to a specific file
 #   github-repos-search --help                                # show help
 #
