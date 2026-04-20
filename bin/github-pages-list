@@ -85,9 +85,11 @@ if [[ -t 1 ]]; then
     C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
     C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
     C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
+    C_CYAN=$'\033[36m'
 else
     C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
     C_YELLOW=""; C_BLUE=""; C_BROWN=""
+    C_CYAN=""
 fi
 
 vis_args=()
@@ -120,10 +122,15 @@ echo
 
 check_pages() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
-    local html_url
-    if html_url=$(gh api "repos/$slug/pages" --jq '.html_url' 2>/dev/null) \
-        && [[ -n "$html_url" && "$html_url" != "null" ]]; then
-        printf "%s\t%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived" "$html_url"
+    local line html_url build_type branch path
+    if line=$(gh api "repos/$slug/pages" \
+        --jq '[.html_url // "", (.build_type // "legacy"), (.source.branch // ""), (.source.path // "")] | @tsv' 2>/dev/null) \
+        && [[ -n "$line" ]]; then
+        IFS=$'\t' read -r html_url build_type branch path <<< "$line"
+        if [[ -n "$html_url" && "$html_url" != "null" ]]; then
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+                "$slug" "$vis" "$is_fork" "$is_archived" "$html_url" "$build_type" "$branch" "$path"
+        fi
     fi
 }
 export -f check_pages
@@ -134,12 +141,17 @@ results=$(echo "$repos" | tr '\t' ' ' \
 
 # Pretty print
 if [[ -n "$results" ]]; then
-    while IFS=$'\t' read -r slug vis is_fork is_archived url; do
+    while IFS=$'\t' read -r slug vis is_fork is_archived url build_type branch path; do
         [[ -z "$slug" ]] && continue
         badges=""
         [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
         [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
         [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        if [[ "$build_type" == "workflow" ]]; then
+            badges="$badges ${C_CYAN}[⚙️ actions]${C_RESET}"
+        elif [[ -n "$branch" ]]; then
+            badges="$badges ${C_CYAN}[📁 $branch:${path:-/}]${C_RESET}"
+        fi
         printf "${C_GREEN}✓${C_RESET} %-50s ${C_DIM}→${C_RESET} %s%s\n" "$slug" "$url" "$badges"
     done <<< "$(echo "$results" | sort)"
 fi

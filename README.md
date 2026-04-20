@@ -49,6 +49,7 @@ brew install gitleaks   # only if you plan to use bin/github-repos-scan-secrets
 
 ```bash
 # List repos that have GitHub Pages enabled
+# TTY output includes a source badge: [📁 <branch>:<path>] or [⚙️ actions]
 github-pages-list -u piecioshka
 github-pages-list -u piecioshka -v public
 github-pages-list -u piecioshka -v private
