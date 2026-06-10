@@ -81,3 +81,6 @@ strong reason and a PR discussion:
 - Destructive scripts default to narrow matching (e.g. `github-homepage-clear`
   only clears URLs matching `*.github.io`). Broader matching must be opt-in
   via an explicit `--force` flag
+- `github-wiki-disable` only disables the wiki feature when the wiki has no
+  pages. It refuses the non-empty case unless `--force` is passed; don't relax
+  this empty-only guard by default

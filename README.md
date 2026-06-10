@@ -171,6 +171,13 @@ github-homepage-clear -u piecioshka --force              # clears ANY homepage
 github-homepage-clear -f repos.txt
 cat repos.txt | github-homepage-clear
 DRY_RUN=1 github-homepage-clear -u piecioshka
+
+# Disable the wiki feature on repos whose wiki is empty (no pages lost)
+DRY_RUN=1 github-wiki-disable -u piecioshka
+github-wiki-disable -u piecioshka                        # only disables EMPTY wikis
+github-wiki-disable -u piecioshka --force                # disable wiki even if it has pages
+github-wiki-disable -f empty-wikis.txt
+cat empty-wikis.txt | github-wiki-disable
 ```
 
 ### Chained workflows
@@ -189,6 +196,12 @@ github-pages-list -u piecioshka -r -o all-pages.txt
 # ...edit all-pages.txt to keep only the ones you want disabled...
 DRY_RUN=1 github-pages-disable -f all-pages.txt
 github-pages-disable -f all-pages.txt
+
+# 4) Find repos with empty wikis, review the list, then disable those wikis
+github-wiki-list-empty -u piecioshka -o empty-wikis.txt
+# ...review empty-wikis.txt...
+DRY_RUN=1 github-wiki-disable -f empty-wikis.txt
+github-wiki-disable -f empty-wikis.txt
 ```
 
 ## Requirements
