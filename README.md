@@ -2,7 +2,7 @@
 
 [![github-ci](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml)
 
-Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, descriptions and secrets.
+Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, wikis, descriptions and secrets.
 
 All scripts live in [`bin/`](bin/). Most share the same conventions:
 
@@ -113,6 +113,14 @@ github-repos-search -u piecioshka -q '^workshop-.*2019' -E   # regex
 github-repos-search -u piecioshka -q react -o               # also save repo URLs to auto-named file
 github-repos-search -u piecioshka -q react -o matches.txt   # also save repo URLs to a specific file
 
+# List repos whose wiki feature is enabled but has no pages (empty wiki)
+github-wiki-list-empty -u piecioshka
+github-wiki-list-empty -u piecioshka -v public
+github-wiki-list-empty -u piecioshka -F
+github-wiki-list-empty -u piecioshka -o                  # also save repo URLs to auto-named file
+github-wiki-list-empty -u piecioshka -o empty-wikis.txt  # also save repo URLs to a specific file
+CONCURRENCY=20 github-wiki-list-empty -u piecioshka
+
 # List repos that have no description set
 github-description-list-empty -u piecioshka
 github-description-list-empty -u piecioshka -v public
@@ -190,7 +198,7 @@ github-pages-disable -f all-pages.txt
 - `jq`
 - `curl`
 - `gitleaks` (`brew install gitleaks`) — only for `github-repos-scan-secrets`
-- `git` — only for `github-repos-scan-secrets`
+- `git` — for `github-repos-scan-secrets` and the `github-wiki-*` scripts (empty-wiki detection)
 
 ## Contributing
 

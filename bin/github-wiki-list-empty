@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-wiki-list-empty -u <username>                   # all repos (forks excluded)
+#   github-wiki-list-empty -u <username> -v public         # only public
+#   github-wiki-list-empty -u <username> -v private        # only private
+#   github-wiki-list-empty -u <username> -F                # include forks
+#   github-wiki-list-empty -u <username> -o                # also save URLs to auto-named file in $PWD
+#   github-wiki-list-empty -u <username> -o out.txt        # also save URLs to a specific file
+#   github-wiki-list-empty --help                          # show help
+#
+# Lists repositories whose wiki feature is ENABLED but has no pages (empty wiki).
+# A wiki lives in a separate git repo at <repo>.wiki.git; an empty wiki has no
+# such repo, so `git ls-remote` returns no refs. Only repos with the wiki
+# feature on are checked (others have nothing to clean up).
+# By default prints repo slugs to stdout. Pass -o to also save repo URLs —
+# bare -o generates <PWD>/wiki-empty-<user>_<timestamp>.txt, -o <path> uses
+# that path. Chain the output into github-wiki-disable -f <file>.
+#
+# Requires: gh CLI (authenticated), git
+
+set -u
+
+GH_USER=""
+VISIBILITY="all"
+INCLUDE_FORKS=0
+OUTPUT_FILE=""
+CONCURRENCY="${CONCURRENCY:-10}"
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--user)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --user requires a username" >&2; exit 1; }
+            GH_USER="$2"; shift 2 ;;
+        -v|--visibility)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --visibility requires a value" >&2; exit 1; }
+            VISIBILITY="$2"; shift 2 ;;
+        -F|--include-forks)
+            INCLUDE_FORKS=1; shift ;;
+        -o|--output)
+            if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+                OUTPUT_FILE="__AUTO__"; shift 1
+            else
+                OUTPUT_FILE="$2"; shift 2
+            fi ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use --help)" >&2; exit 1 ;;
+    esac
+done
+
+if [[ -z "$GH_USER" ]]; then
+    echo "ERROR: -u <user> is required" >&2
+    show_usage
+    exit 1
+fi
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+if ! command -v git > /dev/null 2>&1; then
+    echo "ERROR: git not found." >&2
+    exit 1
+fi
+
+case "$VISIBILITY" in
+    public|private|all) ;;
+    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
+esac
+
+# Token is needed so the wiki check works for private repos too. It is passed to
+# git via a credential helper reading an env var — never on the command line.
+if ! GH_WIKI_TOKEN="$(gh auth token 2>/dev/null)" || [[ -z "$GH_WIKI_TOKEN" ]]; then
+    echo "ERROR: cannot read gh auth token. Run: gh auth login" >&2
+    exit 1
+fi
+export GH_WIKI_TOKEN
+
+if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
+    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    OUTPUT_FILE="$PWD/wiki-empty-$GH_USER""_$TIMESTAMP.txt"
+fi
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
+    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
+    C_YELLOW=""; C_BLUE=""; C_BROWN=""
+fi
+
+vis_args=()
+[[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
+
+jq_filter='.[] | select(.hasWikiEnabled==true)'
+[[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
+jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
+
+echo "${C_BOLD}User:${C_RESET}        $GH_USER"
+echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
+echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
+[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+echo
+
+repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+    --json nameWithOwner,hasWikiEnabled,visibility,isFork,isArchived --jq "$jq_filter")
+
+if [[ -z "$repos" ]]; then
+    echo "No repos with the wiki feature enabled."
+    [[ -n "$OUTPUT_FILE" ]] && : > "$OUTPUT_FILE"
+    exit 0
+fi
+
+total=$(echo "$repos" | wc -l | tr -d ' ')
+echo "Checking $total repos with wikis enabled for empty wikis..."
+echo
+
+# Emits the repo row only when the wiki is empty. A wiki lives in a separate
+# <repo>.wiki.git; an empty wiki has no such repo, so GitHub reports
+# "Repository not found". A reachable wiki advertising refs HAS pages (skip).
+# Any other failure (network, auth, rate limit) is inconclusive — warn on stderr
+# and skip, rather than misreport it as empty. Auth via the GH_WIKI_TOKEN helper.
+wiki_is_empty() {
+    local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
+    local out rc
+    # shellcheck disable=SC2016  # $1/$GH_WIKI_TOKEN must stay literal — git expands them when it runs the helper
+    out=$(git -c credential.helper='' \
+        -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
+        ls-remote "https://github.com/$slug.wiki.git" 2>&1)
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
+        # Reachable wiki repo: empty only if it advertises no refs.
+        [[ -z "$out" ]] && printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
+    elif grep -qi 'not found' <<< "$out"; then
+        printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
+    else
+        printf "WARN  %s — wiki check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$out")" >&2
+    fi
+}
+export -f wiki_is_empty
+
+# Note: TSV fields are passed as separate positional args — BSD xargs collapses
+# tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
+results=$(echo "$repos" | tr '\t' ' ' \
+    | xargs -n 4 -P "$CONCURRENCY" bash -c 'wiki_is_empty "$@"' _)
+
+if [[ -n "$results" ]]; then
+    while IFS=$'\t' read -r slug vis is_fork is_archived; do
+        [[ -z "$slug" ]] && continue
+        badges=""
+        [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
+        [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
+        [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        printf "${C_GREEN}✓${C_RESET} %s%s\n" "$slug" "$badges"
+    done <<< "$(echo "$results" | sort)"
+fi
+
+urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
+    | awk '{print "https://github.com/" $0}')
+
+found=$(echo "$urls" | grep -c . || true)
+echo
+echo "${C_BOLD}${C_DIM}Found $found/$total repos with an empty wiki.${C_RESET}"
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$urls" > "$OUTPUT_FILE"
+    echo "Written to: $OUTPUT_FILE"
+fi
