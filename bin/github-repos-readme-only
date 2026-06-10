@@ -14,7 +14,7 @@
 # bare -o generates <PWD>/readme-only-<user>_<timestamp>.txt, -o <path> uses
 # that path.
 #
-# Requires: gh CLI (authenticated), jq
+# Requires: gh CLI (authenticated)
 
 set -u
 
@@ -64,10 +64,6 @@ fi
 
 if ! command -v gh > /dev/null 2>&1; then
     echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-if ! command -v jq > /dev/null 2>&1; then
-    echo "ERROR: jq not found. Install with: brew install jq" >&2
     exit 1
 fi
 

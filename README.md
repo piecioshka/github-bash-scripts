@@ -222,7 +222,7 @@ github-wiki-disable -f empty-wikis.txt
 
 - `bash` 4+ / macOS default bash works
 - [`gh`](https://cli.github.com/) — authenticated (`gh auth login`)
-- `jq`
+- `jq` — only for `github-repos-search`
 - `curl`
 - `gitleaks` (`brew install gitleaks`) — only for `github-repos-scan-secrets`
 - `git` — for `github-repos-scan-secrets` and the `github-wiki-*` scripts (empty-wiki detection)
