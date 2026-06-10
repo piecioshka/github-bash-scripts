@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-projects-disable -u <username>                    # all non-fork repos of a user
+#   github-projects-disable -u <username> -v public          # only public
+#   github-projects-disable -u <username> -v private         # only private
+#   github-projects-disable -u <username> -F                 # include forks
+#   github-projects-disable -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-projects-disable  # repos from stdin
+#   github-projects-disable -u <username> --force            # disable even if projects exist
+#   DRY_RUN=1 github-projects-disable -u <username>          # show what would be done
+#   github-projects-disable --help                           # show help
+#
+# For each repo on the list: if the Projects feature is enabled but no Projects
+# are linked to the repo (empty), disables the Projects feature. Repos whose
+# Projects feature is already off, or that have linked Projects, are skipped —
+# unless --force, which disables the feature regardless (the project boards
+# themselves are not deleted; they just stop showing on the repo's Projects tab).
+# Linked-project count comes from GraphQL `projectsV2`; classic boards are not
+# counted.
+#
+# Pairs with github-projects-list-empty: `github-projects-list-empty -u me -o p.txt`
+# then `github-projects-disable -f p.txt`.
+#
+# Accepts repo URLs (one per line, lines starting with # are ignored):
+#   - https://github.com/owner/repo
+#
+# Requires: gh CLI (authenticated, with read:project scope) and admin access.
+
+set -u
+
+DRY_RUN="${DRY_RUN:-0}"
+INPUT_FILE=""
+GH_USER=""
+VISIBILITY="all"
+INCLUDE_FORKS=0
+FORCE=0
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--file)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --file requires a path" >&2; exit 1; }
+            INPUT_FILE="$2"; shift 2 ;;
+        -u|--user)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --user requires a username" >&2; exit 1; }
+            GH_USER="$2"; shift 2 ;;
+        -v|--visibility)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --visibility requires a value" >&2; exit 1; }
+            VISIBILITY="$2"; shift 2 ;;
+        -F|--include-forks)
+            INCLUDE_FORKS=1; shift ;;
+        --force)
+            FORCE=1; shift ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use -f <file>, -u <user>, --force or --help)" >&2; exit 1 ;;
+    esac
+done
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+
+case "$VISIBILITY" in
+    public|private|all) ;;
+    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
+esac
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'
+    C_RED=$'\033[31m'; C_DIM=$'\033[90m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""
+fi
+
+paint_status() {
+    local status="$1"
+    local padded
+    printf -v padded "%-6s" "$status"
+    case "$status" in
+        OK)   printf "%s%s%s" "$C_GREEN"  "$padded" "$C_RESET" ;;
+        DRY)  printf "%s%s%s" "$C_YELLOW" "$padded" "$C_RESET" ;;
+        KEEP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        FAIL) printf "%s%s%s" "$C_RED"    "$padded" "$C_RESET" ;;
+        SKIP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
+        *)    printf "%s" "$padded" ;;
+    esac
+}
+
+print_row() {
+    local status="$1"
+    local repo="$2"
+    local details="${3:-}"
+    printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
+}
+
+url_to_slug() {
+    local url="$1"
+    url="${url#"${url%%[![:space:]]*}"}"
+    url="${url%"${url##*[![:space:]]}"}"
+    if [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
+        local repo="${BASH_REMATCH[2]%.git}"
+        echo "${BASH_REMATCH[1]}/$repo"
+        return
+    fi
+    echo ""
+}
+
+# Echoes the number of Projects v2 linked to the repo (or "" on error).
+projects_count() {
+    local slug="$1"
+    local owner="${slug%%/*}" name="${slug#*/}"
+    # shellcheck disable=SC2016  # $owner/$name are GraphQL variables — must stay literal, gh binds them via -f
+    gh api graphql \
+        -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){projectsV2(first:1){totalCount}}}' \
+        -f owner="$owner" -f name="$name" \
+        --jq '.data.repository.projectsV2.totalCount' 2>/dev/null
+}
+
+disable_projects() {
+    local url="$1"
+    local slug
+    slug=$(url_to_slug "$url")
+
+    if [[ -z "$slug" ]]; then
+        print_row "SKIP" "$url" "unrecognized URL"
+        return
+    fi
+
+    local enabled
+    if ! enabled=$(gh api "repos/$slug" --jq '.has_projects' 2>/dev/null); then
+        print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
+        return
+    fi
+
+    if [[ "$enabled" != "true" ]]; then
+        print_row "KEEP" "$slug" "Projects feature already disabled"
+        return
+    fi
+
+    if [[ "$FORCE" != "1" ]]; then
+        local count
+        count=$(projects_count "$slug")
+        if [[ -z "$count" ]]; then
+            print_row "SKIP" "$slug" "cannot read project count (read:project scope?)"
+            return
+        fi
+        if [[ "$count" != "0" ]]; then
+            print_row "KEEP" "$slug" "has $count linked project(s) — not empty (use --force)"
+            return
+        fi
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        local note="would disable Projects feature"
+        [[ "$FORCE" == "1" ]] && note="$note [forced — may have projects]"
+        print_row "DRY" "$slug" "$note"
+        return
+    fi
+
+    local out
+    if out=$(gh repo edit "$slug" --enable-projects=false 2>&1); then
+        print_row "OK" "$slug" "Projects feature disabled"
+    else
+        print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
+    fi
+}
+
+input_source() {
+    if [[ -n "$INPUT_FILE" ]]; then
+        if [[ ! -f "$INPUT_FILE" ]]; then
+            echo "ERROR: file does not exist: $INPUT_FILE" >&2
+            exit 1
+        fi
+        echo "${C_BOLD}Source:${C_RESET} file $INPUT_FILE" >&2
+        cat "$INPUT_FILE"
+        return
+    fi
+
+    if [[ -n "$GH_USER" ]]; then
+        local vis_args=()
+        [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
+        local jq_filter='.[] | select(.hasProjectsEnabled==true)'
+        [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
+        jq_filter="$jq_filter | .nameWithOwner"
+
+        local fork_note="(forks excluded)"
+        [[ "$INCLUDE_FORKS" == "1" ]] && fork_note="(forks included)"
+        echo "${C_BOLD}Source:${C_RESET} gh repo list $GH_USER --visibility $VISIBILITY $fork_note (projects enabled)" >&2
+        gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+            --json nameWithOwner,hasProjectsEnabled,isFork --jq "$jq_filter" \
+            | sed 's#^#https://github.com/#'
+        return
+    fi
+
+    if [[ ! -t 0 ]]; then
+        echo "${C_BOLD}Source:${C_RESET} stdin" >&2
+        cat
+        return
+    fi
+
+    show_usage
+    exit 1
+}
+
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
+[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode — will disable Projects even if projects exist ==${C_RESET}"
+
+input_source \
+    | grep -vE '^[[:space:]]*(#|$)' \
+    | grep -Eo 'https?://[^ ]+' \
+    | while read -r url; do
+        disable_projects "$url"
+    done

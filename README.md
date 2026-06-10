@@ -186,6 +186,12 @@ github-wiki-disable -u piecioshka                        # only disables EMPTY w
 github-wiki-disable -u piecioshka --force                # disable wiki even if it has pages
 github-wiki-disable -f empty-wikis.txt
 cat empty-wikis.txt | github-wiki-disable
+
+# Disable the Projects feature on repos with no linked projects
+DRY_RUN=1 github-projects-disable -u piecioshka
+github-projects-disable -u piecioshka                    # only disables EMPTY projects
+github-projects-disable -u piecioshka --force            # disable even if projects exist
+github-projects-disable -f empty-proj.txt
 ```
 
 ### Chained workflows

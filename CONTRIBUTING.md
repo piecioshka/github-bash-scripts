@@ -82,5 +82,7 @@ strong reason and a PR discussion:
   only clears URLs matching `*.github.io`). Broader matching must be opt-in
   via an explicit `--force` flag
 - `github-wiki-disable` only disables the wiki feature when the wiki has no
-  pages. It refuses the non-empty case unless `--force` is passed; don't relax
-  this empty-only guard by default
+  pages; `github-projects-disable` only when no Projects are linked. Each
+  refuses the non-empty case unless `--force` is passed. These "empty-only"
+  guards are the load-bearing safety; don't relax them to match-anything by
+  default
