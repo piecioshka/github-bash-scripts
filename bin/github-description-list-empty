@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-description-list-empty -u <username>                # all repos (forks excluded)
+#   github-description-list-empty -u <username> -v public      # only public
+#   github-description-list-empty -u <username> -v private     # only private
+#   github-description-list-empty -u <username> -F             # include forks
+#   github-description-list-empty -u <username> -o             # also save URLs to auto-named file in $PWD
+#   github-description-list-empty -u <username> -o out.txt     # also save URLs to a specific file
+#   github-description-list-empty --help                       # show help
+#
+# Lists repositories that have no description set (empty or null). Fetched in a
+# single API call — no per-repo roundtrips.
+# By default prints repo slugs to stdout. Pass -o to also save repo URLs —
+# bare -o generates <PWD>/description-empty-<user>_<timestamp>.txt, -o <path>
+# uses that path.
+#
+# Requires: gh CLI (authenticated)
+
+set -u
+
+GH_USER=""
+VISIBILITY="all"
+INCLUDE_FORKS=0
+OUTPUT_FILE=""
+
+show_usage() {
+    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
+}
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--user)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --user requires a username" >&2; exit 1; }
+            GH_USER="$2"; shift 2 ;;
+        -v|--visibility)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --visibility requires a value" >&2; exit 1; }
+            VISIBILITY="$2"; shift 2 ;;
+        -F|--include-forks)
+            INCLUDE_FORKS=1; shift ;;
+        -o|--output)
+            if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
+                OUTPUT_FILE="__AUTO__"; shift 1
+            else
+                OUTPUT_FILE="$2"; shift 2
+            fi ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        *)
+            echo "Unknown argument: $1 (use --help)" >&2; exit 1 ;;
+    esac
+done
+
+if [[ -z "$GH_USER" ]]; then
+    echo "ERROR: -u <user> is required" >&2
+    show_usage
+    exit 1
+fi
+
+if ! command -v gh > /dev/null 2>&1; then
+    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
+    exit 1
+fi
+
+case "$VISIBILITY" in
+    public|private|all) ;;
+    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
+esac
+
+if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
+    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    OUTPUT_FILE="$PWD/description-empty-$GH_USER""_$TIMESTAMP.txt"
+fi
+
+# colors (tty only)
+if [[ -t 1 ]]; then
+    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
+    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
+    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
+else
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
+    C_YELLOW=""; C_BLUE=""; C_BROWN=""
+fi
+
+vis_args=()
+[[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
+
+# Emit every (fork-filtered) repo as TSV prefixed with an empty/set flag, so a
+# single list call yields both the total count and the empty-description subset.
+jq_filter='.[]'
+[[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
+jq_filter="$jq_filter | [(if (.description // \"\") == \"\" then \"empty\" else \"set\" end), .nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
+
+echo "${C_BOLD}User:${C_RESET}       $GH_USER"
+echo "${C_BOLD}Visibility:${C_RESET} $VISIBILITY"
+echo "${C_BOLD}Forks:${C_RESET}      $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}     $OUTPUT_FILE"
+echo
+
+rows=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+    --json nameWithOwner,description,visibility,isFork,isArchived --jq "$jq_filter")
+
+total=$(echo "$rows" | grep -c . || true)
+results=$(echo "$rows" | awk -F'\t' 'BEGIN{OFS="\t"} $1=="empty"{print $2,$3,$4,$5}')
+
+if [[ -z "$results" ]]; then
+    echo "No repos with an empty description."
+    [[ -n "$OUTPUT_FILE" ]] && : > "$OUTPUT_FILE"
+    exit 0
+fi
+
+while IFS=$'\t' read -r slug vis is_fork is_archived; do
+    [[ -z "$slug" ]] && continue
+    badges=""
+    [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
+    [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
+    [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+    printf "${C_GREEN}✓${C_RESET} %s%s\n" "$slug" "$badges"
+done <<< "$(echo "$results" | sort)"
+
+urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
+    | awk '{print "https://github.com/" $0}')
+
+found=$(echo "$urls" | grep -c . || true)
+echo
+echo "${C_BOLD}${C_DIM}Found $found/$total repos with an empty description.${C_RESET}"
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$urls" > "$OUTPUT_FILE"
+    echo "Written to: $OUTPUT_FILE"
+fi

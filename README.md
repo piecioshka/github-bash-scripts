@@ -2,7 +2,7 @@
 
 [![github-ci](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml)
 
-Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages and secrets.
+Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, descriptions and secrets.
 
 All scripts live in [`bin/`](bin/). Most share the same conventions:
 
@@ -103,6 +103,13 @@ github-repos-search -u piecioshka -q TypeScript -c       # case-sensitive
 github-repos-search -u piecioshka -q '^workshop-.*2019' -E   # regex
 github-repos-search -u piecioshka -q react -o               # also save repo URLs to auto-named file
 github-repos-search -u piecioshka -q react -o matches.txt   # also save repo URLs to a specific file
+
+# List repos that have no description set
+github-description-list-empty -u piecioshka
+github-description-list-empty -u piecioshka -v public
+github-description-list-empty -u piecioshka -F
+github-description-list-empty -u piecioshka -o                 # also save repo URLs to auto-named file
+github-description-list-empty -u piecioshka -o no-desc.txt     # also save repo URLs to a specific file
 ```
 
 ### Audit (secrets)
