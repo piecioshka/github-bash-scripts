@@ -95,6 +95,15 @@ github-repos-with-branch -u piecioshka -o                # also save to auto-nam
 github-repos-with-branch -u piecioshka -o branches.txt   # also save to a specific file
 CONCURRENCY=20 github-repos-with-branch -u piecioshka
 
+# List repos that contain a LICENSE file (LICENSE/LICENCE/COPYING/UNLICENSE)
+github-repos-with-license -u piecioshka
+github-repos-with-license -u piecioshka -n                # only Node.js projects (have package.json)
+github-repos-with-license -u piecioshka -v public
+github-repos-with-license -u piecioshka -F
+github-repos-with-license -u piecioshka -o               # also save repo URLs to auto-named file
+github-repos-with-license -u piecioshka -o licensed.txt  # also save repo URLs to a specific file
+CONCURRENCY=20 github-repos-with-license -u piecioshka
+
 # Search across repo metadata (name, description, homepage, topics, language)
 github-repos-search -u piecioshka -q angular
 github-repos-search -u piecioshka -q angular -v public
