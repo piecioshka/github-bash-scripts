@@ -5,6 +5,7 @@
 #   github-homepage-list-broken -u <username> -v private   # only private
 #   github-homepage-list-broken -u <username> -F           # include forks
 #   github-homepage-list-broken -u <username> -r           # output repo URLs (github.com/owner/repo)
+#   github-homepage-list-broken -u <username> -b           # print only broken links (skip OK rows)
 #   github-homepage-list-broken -u <username> -o           # also save URLs to auto-named file in $PWD
 #   github-homepage-list-broken -u <username> -o out.txt   # also save URLs to a specific file
 #   github-homepage-list-broken --help                     # show help
@@ -26,6 +27,7 @@ set -u
 GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
+BROKEN_ONLY=0
 OUTPUT_FILE=""
 OUTPUT_MODE="homepage"    # homepage | repo
 CONCURRENCY="${CONCURRENCY:-10}"
@@ -52,6 +54,8 @@ while [[ $# -gt 0 ]]; do
             INCLUDE_FORKS=1; shift ;;
         -r|--repo-url)
             OUTPUT_MODE="repo"; shift ;;
+        -b|--broken-only)
+            BROKEN_ONLY=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                 OUTPUT_FILE="__AUTO__"; shift 1
@@ -122,6 +126,7 @@ echo "${C_BOLD}User:${C_RESET}        $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
 echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
 echo "${C_BOLD}Mode:${C_RESET}        $OUTPUT_MODE"
+[[ "$BROKEN_ONLY" == "1" ]] && echo "${C_BOLD}Filter:${C_RESET}      broken only"
 echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
 echo "${C_BOLD}Timeout:${C_RESET}     ${TIMEOUT}s"
 [[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
@@ -164,8 +169,11 @@ results=$(echo "$entries" \
     | tr '\t' '\n' \
     | xargs -n 5 -P "$CONCURRENCY" bash -c 'check_entry "$@"' _)
 
-# 3. Print sorted
-echo "$results" | sort | while IFS=$'\t' read -r status code slug url vis is_fork is_archived; do
+# 3. Print sorted (optionally only BROKEN rows)
+display="$results"
+[[ "$BROKEN_ONLY" == "1" ]] && display=$(echo "$results" | awk -F'\t' '$1=="BROKEN"')
+
+echo "$display" | sort | while IFS=$'\t' read -r status code slug url vis is_fork is_archived; do
     [[ -z "$status" ]] && continue
     badges=""
     [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"

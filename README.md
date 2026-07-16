@@ -73,6 +73,7 @@ github-homepage-list-broken -u piecioshka
 github-homepage-list-broken -u piecioshka -v public
 github-homepage-list-broken -u piecioshka -F
 github-homepage-list-broken -u piecioshka -r             # output repo URLs (chainable)
+github-homepage-list-broken -u piecioshka -b             # print only broken links
 github-homepage-list-broken -u piecioshka -o             # also save to auto-named file in $PWD
 github-homepage-list-broken -u piecioshka -o broken.txt  # also save to a specific file
 CONCURRENCY=20 TIMEOUT=30 github-homepage-list-broken -u piecioshka
