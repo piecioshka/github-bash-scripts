@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-projects-list-empty -u <username>                # all repos (forks excluded)
-#   github-projects-list-empty -u <username> -v public      # only public
-#   github-projects-list-empty -u <username> -v private     # only private
-#   github-projects-list-empty -u <username> -F             # include forks
-#   github-projects-list-empty -u <username> -o             # also save URLs to auto-named file in $PWD
-#   github-projects-list-empty -u <username> -o out.txt     # also save URLs to a specific file
-#   github-projects-list-empty --help                       # show help
+#   github-find-repos-with-empty-wikis -u <username>                   # all repos (forks excluded)
+#   github-find-repos-with-empty-wikis -u <username> -v public         # only public
+#   github-find-repos-with-empty-wikis -u <username> -v private        # only private
+#   github-find-repos-with-empty-wikis -u <username> -F                # include forks
+#   github-find-repos-with-empty-wikis -u <username> -o                # also save URLs to auto-named file in $PWD
+#   github-find-repos-with-empty-wikis -u <username> -o out.txt        # also save URLs to a specific file
+#   github-find-repos-with-empty-wikis --help                          # show help
 #
-# Lists repositories whose Projects feature is ENABLED but that have no Projects
-# linked to them (empty projects). Only repos with the Projects feature on are
-# checked. Linked-project count is read from the GraphQL `projectsV2` field
-# (Projects v2); legacy classic project boards are not counted.
+# Lists repositories whose wiki feature is ENABLED but has no pages (empty wiki).
+# A wiki lives in a separate git repo at <repo>.wiki.git; an empty wiki has no
+# such repo, so `git ls-remote` returns no refs. Only repos with the wiki
+# feature on are checked (others have nothing to clean up).
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/projects-empty-<user>_<timestamp>.txt, -o <path> uses
-# that path. Chain the output into github-projects-disable -f <file>.
+# bare -o generates <PWD>/wiki-empty-<user>_<timestamp>.txt, -o <path> uses
+# that path. Chain the output into github-disable-wikis -f <file>.
 #
-# Requires: gh CLI (authenticated, with read:project scope)
+# Requires: gh CLI (authenticated), git
 
 set -u
 
@@ -68,15 +68,27 @@ if ! command -v gh > /dev/null 2>&1; then
     echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
     exit 1
 fi
+if ! command -v git > /dev/null 2>&1; then
+    echo "ERROR: git not found." >&2
+    exit 1
+fi
 
 case "$VISIBILITY" in
     public|private|all) ;;
     *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
 esac
 
+# Token is needed so the wiki check works for private repos too. It is passed to
+# git via a credential helper reading an env var — never on the command line.
+if ! GH_WIKI_TOKEN="$(gh auth token 2>/dev/null)" || [[ -z "$GH_WIKI_TOKEN" ]]; then
+    echo "ERROR: cannot read gh auth token. Run: gh auth login" >&2
+    exit 1
+fi
+export GH_WIKI_TOKEN
+
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    OUTPUT_FILE="$PWD/projects-empty-$GH_USER""_$TIMESTAMP.txt"
+    OUTPUT_FILE="$PWD/wiki-empty-$GH_USER""_$TIMESTAMP.txt"
 fi
 
 # colors (tty only)
@@ -92,7 +104,7 @@ fi
 vis_args=()
 [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
 
-jq_filter='.[] | select(.hasProjectsEnabled==true)'
+jq_filter='.[] | select(.hasWikiEnabled==true)'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
 jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
 
@@ -104,38 +116,46 @@ echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
 echo
 
 repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-    --json nameWithOwner,hasProjectsEnabled,visibility,isFork,isArchived --jq "$jq_filter")
+    --json nameWithOwner,hasWikiEnabled,visibility,isFork,isArchived --jq "$jq_filter")
 
 if [[ -z "$repos" ]]; then
-    echo "No repos with the Projects feature enabled."
+    echo "No repos with the wiki feature enabled."
     [[ -n "$OUTPUT_FILE" ]] && : > "$OUTPUT_FILE"
     exit 0
 fi
 
 total=$(echo "$repos" | wc -l | tr -d ' ')
-echo "Checking $total repos with Projects enabled for linked projects..."
+echo "Checking $total repos with wikis enabled for empty wikis..."
 echo
 
-# Emits the repo row only if the repo has zero linked Projects v2.
-projects_is_empty() {
+# Emits the repo row only when the wiki is empty. A wiki lives in a separate
+# <repo>.wiki.git; an empty wiki has no such repo, so GitHub reports
+# "Repository not found". A reachable wiki advertising refs HAS pages (skip).
+# Any other failure (network, auth, rate limit) is inconclusive — warn on stderr
+# and skip, rather than misreport it as empty. Auth via the GH_WIKI_TOKEN helper.
+wiki_is_empty() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
-    local owner="${slug%%/*}" name="${slug#*/}"
-    local count
-    # shellcheck disable=SC2016  # $owner/$name are GraphQL variables — must stay literal, gh binds them via -f
-    count=$(gh api graphql \
-        -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){projectsV2(first:1){totalCount}}}' \
-        -f owner="$owner" -f name="$name" \
-        --jq '.data.repository.projectsV2.totalCount' 2>/dev/null)
-    if [[ "$count" == "0" ]]; then
+    local out rc
+    # shellcheck disable=SC2016  # $1/$GH_WIKI_TOKEN must stay literal — git expands them when it runs the helper
+    out=$(git -c credential.helper='' \
+        -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
+        ls-remote "https://github.com/$slug.wiki.git" 2>&1)
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
+        # Reachable wiki repo: empty only if it advertises no refs.
+        [[ -z "$out" ]] && printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
+    elif grep -qi 'not found' <<< "$out"; then
         printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
+    else
+        printf "WARN  %s — wiki check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$out")" >&2
     fi
 }
-export -f projects_is_empty
+export -f wiki_is_empty
 
 # Note: TSV fields are passed as separate positional args — BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
 results=$(echo "$repos" | tr '\t' ' ' \
-    | xargs -n 4 -P "$CONCURRENCY" bash -c 'projects_is_empty "$@"' _)
+    | xargs -n 4 -P "$CONCURRENCY" bash -c 'wiki_is_empty "$@"' _)
 
 if [[ -n "$results" ]]; then
     while IFS=$'\t' read -r slug vis is_fork is_archived; do
@@ -153,7 +173,7 @@ urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
 
 found=$(echo "$urls" | grep -c . || true)
 echo
-echo "${C_BOLD}${C_DIM}Found $found/$total repos with empty projects.${C_RESET}"
+echo "${C_BOLD}${C_DIM}Found $found/$total repos with an empty wiki.${C_RESET}"
 
 if [[ -n "$OUTPUT_FILE" ]]; then
     echo "$urls" > "$OUTPUT_FILE"

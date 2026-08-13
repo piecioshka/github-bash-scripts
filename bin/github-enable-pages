@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-pages-enable -f links.txt                     # repos from a file
-#   echo "https://github.com/o/r" | github-pages-enable  # repos from stdin
-#   BRANCH=gh-pages github-pages-enable -f links.txt     # custom source branch
-#   BRANCH=main PATH_IN_REPO=/docs github-pages-enable -f links.txt
-#   DRY_RUN=1 github-pages-enable -f links.txt           # show what would be done
-#   github-pages-enable --help                           # show help
+#   github-enable-pages -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-enable-pages  # repos from stdin
+#   BRANCH=gh-pages github-enable-pages -f links.txt     # custom source branch
+#   BRANCH=main PATH_IN_REPO=/docs github-enable-pages -f links.txt
+#   DRY_RUN=1 github-enable-pages -f links.txt           # show what would be done
+#   github-enable-pages --help                           # show help
 #
 # Enables GitHub Pages for each repo on the list. Repos that already have
 # Pages enabled are reported as HAVE and left untouched.

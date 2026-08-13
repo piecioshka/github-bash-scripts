@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-pages-disable -f links.txt                    # repos from a file
-#   echo "https://github.com/o/r" | github-pages-disable # repos from stdin
-#   DRY_RUN=1 github-pages-disable -f links.txt          # show what would be done
-#   github-pages-disable --help                          # show help
+#   github-disable-pages -f links.txt                    # repos from a file
+#   echo "https://github.com/o/r" | github-disable-pages # repos from stdin
+#   DRY_RUN=1 github-disable-pages -f links.txt          # show what would be done
+#   github-disable-pages --help                          # show help
 #
 # Disables GitHub Pages for each repo on the list.
 #

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-homepage-list -u <username>                    # all repos (forks excluded)
-#   github-homepage-list -u <username> -v public          # only public
-#   github-homepage-list -u <username> -v private         # only private
-#   github-homepage-list -u <username> -F                 # include forks
-#   github-homepage-list -u <username> -r                 # output repo URLs (github.com/owner/repo)
-#   github-homepage-list -u <username> -o                 # also save URLs to auto-named file in $PWD
-#   github-homepage-list -u <username> -o out.txt         # also save URLs to a specific file
-#   github-homepage-list --help                           # show help
+#   github-list-homepages -u <username>                    # all repos (forks excluded)
+#   github-list-homepages -u <username> -v public          # only public
+#   github-list-homepages -u <username> -v private         # only private
+#   github-list-homepages -u <username> -F                 # include forks
+#   github-list-homepages -u <username> -r                 # output repo URLs (github.com/owner/repo)
+#   github-list-homepages -u <username> -o                 # also save URLs to auto-named file in $PWD
+#   github-list-homepages -u <username> -o out.txt         # also save URLs to a specific file
+#   github-list-homepages --help                           # show help
 #
 # Lists repositories that have a non-empty website/homepage URL. Default mode:
 # homepage URLs. With -r / --repo-url: repository URLs instead.

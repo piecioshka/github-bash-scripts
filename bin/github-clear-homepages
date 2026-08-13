@@ -1,28 +1,25 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-wiki-disable -u <username>                    # all non-fork repos of a user
-#   github-wiki-disable -u <username> -v public          # only public
-#   github-wiki-disable -u <username> -v private         # only private
-#   github-wiki-disable -u <username> -F                 # include forks
-#   github-wiki-disable -f links.txt                     # repos from a file
-#   echo "https://github.com/o/r" | github-wiki-disable  # repos from stdin
-#   github-wiki-disable -u <username> --force            # disable wiki even if it has pages
-#   DRY_RUN=1 github-wiki-disable -u <username>          # show what would be done
-#   github-wiki-disable --help                           # show help
+#   github-clear-homepages -u <username>                    # all non-fork repos of a user
+#   github-clear-homepages -u <username> -v public          # only public
+#   github-clear-homepages -u <username> -v private         # only private
+#   github-clear-homepages -u <username> -F                 # include forks
+#   github-clear-homepages -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-clear-homepages  # repos from stdin
+#   github-clear-homepages -u <username> --force            # clear ANY homepage (not only *.github.io)
+#   DRY_RUN=1 github-clear-homepages -u <username>          # show what would be done
+#   github-clear-homepages --help                           # show help
 #
-# For each repo on the list: if the wiki feature is enabled but the wiki has no
-# pages (empty wiki), disables the wiki feature. Repos whose wiki is already off,
-# or whose wiki HAS pages, are skipped — unless --force, which disables the wiki
-# feature regardless of content (the pages are NOT deleted; re-enabling the wiki
-# brings them back).
+# For each repo on the list: if the repo's website/homepage URL points to a
+# *.github.io address, clears it. Repos whose homepage is something else
+# (or empty) are skipped — unless --force is used, which clears ANY non-empty
+# homepage.
 #
-# Pairs with github-wiki-list-empty: `github-wiki-list-empty -u me -o w.txt`
-# then `github-wiki-disable -f w.txt`.
-#
-# Accepts repo URLs (one per line, lines starting with # are ignored):
+# Accepts both URL formats (one per line, lines starting with # are ignored):
 #   - https://github.com/owner/repo
+#   - https://owner.github.io/repo/
 #
-# Requires: gh CLI (authenticated) with admin access on the repos, git.
+# Requires: gh CLI (authenticated) with admin access on the repos.
 
 set -u
 
@@ -68,23 +65,11 @@ if ! command -v gh > /dev/null 2>&1; then
     echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
     exit 1
 fi
-if ! command -v git > /dev/null 2>&1; then
-    echo "ERROR: git not found." >&2
-    exit 1
-fi
 
 case "$VISIBILITY" in
     public|private|all) ;;
     *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
 esac
-
-# Token for the wiki content check — passed to git via a credential helper that
-# reads this env var, never on the command line.
-if ! GH_WIKI_TOKEN="$(gh auth token 2>/dev/null)" || [[ -z "$GH_WIKI_TOKEN" ]]; then
-    echo "ERROR: cannot read gh auth token. Run: gh auth login" >&2
-    exit 1
-fi
-export GH_WIKI_TOKEN
 
 # colors (tty only)
 if [[ -t 1 ]]; then
@@ -125,29 +110,14 @@ url_to_slug() {
         echo "${BASH_REMATCH[1]}/$repo"
         return
     fi
+    if [[ "$url" =~ ^https?://([^./]+)\.github\.io/([^/]+) ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return
+    fi
     echo ""
 }
 
-# Echoes the wiki state: "pages" (has >=1 page), "empty" (no wiki repo —
-# GitHub reports "Repository not found"), or "error" (inconclusive: network,
-# auth or rate limit). Auth comes from the GH_WIKI_TOKEN credential helper.
-wiki_state() {
-    local slug="$1" out rc
-    # shellcheck disable=SC2016  # $1/$GH_WIKI_TOKEN must stay literal — git expands them when it runs the helper
-    out=$(git -c credential.helper='' \
-        -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
-        ls-remote "https://github.com/$slug.wiki.git" 2>&1)
-    rc=$?
-    if [[ $rc -eq 0 ]]; then
-        [[ -n "$out" ]] && echo "pages" || echo "empty"
-    elif grep -qi 'not found' <<< "$out"; then
-        echo "empty"
-    else
-        echo "error"
-    fi
-}
-
-disable_wiki() {
+clear_homepage() {
     local url="$1"
     local slug
     slug=$(url_to_slug "$url")
@@ -157,41 +127,33 @@ disable_wiki() {
         return
     fi
 
-    local enabled
-    if ! enabled=$(gh api "repos/$slug" --jq '.has_wiki' 2>/dev/null); then
+    local homepage
+    if ! homepage=$(gh api "repos/$slug" --jq '.homepage // ""' 2>/dev/null); then
         print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
         return
     fi
 
-    if [[ "$enabled" != "true" ]]; then
-        print_row "KEEP" "$slug" "wiki feature already disabled"
+    if [[ -z "$homepage" ]]; then
+        print_row "KEEP" "$slug" "homepage already empty"
         return
     fi
 
-    # Wiki feature is on — decide based on its content (unless forced).
-    if [[ "$FORCE" != "1" ]]; then
-        local state
-        state=$(wiki_state "$slug")
-        case "$state" in
-            pages)
-                print_row "KEEP" "$slug" "wiki has pages — not empty (use --force to disable anyway)"
-                return ;;
-            error)
-                print_row "FAIL" "$slug" "wiki check inconclusive (network/auth?) — skipped for safety"
-                return ;;
-        esac
+    # Only clear if homepage points to *.github.io, unless --force
+    if [[ "$FORCE" != "1" && ! "$homepage" =~ ^https?://[^/]+\.github\.io(/|$) ]]; then
+        print_row "KEEP" "$slug" "homepage not *.github.io: $homepage (use --force to override)"
+        return
     fi
 
     if [[ "$DRY_RUN" == "1" ]]; then
-        local note="would disable wiki feature"
-        [[ "$FORCE" == "1" ]] && note="$note [forced — may have pages]"
+        local note="would clear homepage ($homepage)"
+        [[ "$FORCE" == "1" ]] && note="$note [forced]"
         print_row "DRY" "$slug" "$note"
         return
     fi
 
     local out
-    if out=$(gh repo edit "$slug" --enable-wiki=false 2>&1); then
-        print_row "OK" "$slug" "wiki feature disabled"
+    if out=$(gh repo edit "$slug" --homepage "" 2>&1); then
+        print_row "OK" "$slug" "cleared (was: $homepage)"
     else
         print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
     fi
@@ -211,15 +173,15 @@ input_source() {
     if [[ -n "$GH_USER" ]]; then
         local vis_args=()
         [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
-        local jq_filter='.[] | select(.hasWikiEnabled==true)'
-        [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
+        local jq_filter='.[]'
+        [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
         jq_filter="$jq_filter | .nameWithOwner"
 
         local fork_note="(forks excluded)"
         [[ "$INCLUDE_FORKS" == "1" ]] && fork_note="(forks included)"
-        echo "${C_BOLD}Source:${C_RESET} gh repo list $GH_USER --visibility $VISIBILITY $fork_note (wiki enabled)" >&2
+        echo "${C_BOLD}Source:${C_RESET} gh repo list $GH_USER --visibility $VISIBILITY $fork_note" >&2
         gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-            --json nameWithOwner,hasWikiEnabled,isFork --jq "$jq_filter" \
+            --json nameWithOwner,isFork --jq "$jq_filter" \
             | sed 's#^#https://github.com/#'
         return
     fi
@@ -235,11 +197,11 @@ input_source() {
 }
 
 [[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
-[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode — will disable wiki even if it has pages ==${C_RESET}"
+[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode — will clear ANY homepage ==${C_RESET}"
 
 input_source \
     | grep -vE '^[[:space:]]*(#|$)' \
     | grep -Eo 'https?://[^ ]+' \
     | while read -r url; do
-        disable_wiki "$url"
+        clear_homepage "$url"
     done

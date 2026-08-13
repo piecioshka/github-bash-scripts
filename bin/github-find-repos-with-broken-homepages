@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-homepage-list-broken -u <username>              # all repos (forks excluded)
-#   github-homepage-list-broken -u <username> -v public    # only public
-#   github-homepage-list-broken -u <username> -v private   # only private
-#   github-homepage-list-broken -u <username> -F           # include forks
-#   github-homepage-list-broken -u <username> -r           # output repo URLs (github.com/owner/repo)
-#   github-homepage-list-broken -u <username> -b           # print only broken links (skip OK rows)
-#   github-homepage-list-broken -u <username> -o           # also save URLs to auto-named file in $PWD
-#   github-homepage-list-broken -u <username> -o out.txt   # also save URLs to a specific file
-#   github-homepage-list-broken --help                     # show help
+#   github-find-repos-with-broken-homepages -u <username>              # all repos (forks excluded)
+#   github-find-repos-with-broken-homepages -u <username> -v public    # only public
+#   github-find-repos-with-broken-homepages -u <username> -v private   # only private
+#   github-find-repos-with-broken-homepages -u <username> -F           # include forks
+#   github-find-repos-with-broken-homepages -u <username> -r           # output repo URLs (github.com/owner/repo)
+#   github-find-repos-with-broken-homepages -u <username> -b           # print only broken links (skip OK rows)
+#   github-find-repos-with-broken-homepages -u <username> -o           # also save URLs to auto-named file in $PWD
+#   github-find-repos-with-broken-homepages -u <username> -o out.txt   # also save URLs to a specific file
+#   github-find-repos-with-broken-homepages --help                     # show help
 #
 # Lists repositories whose homepage URL is broken (HTTP status outside 2xx/3xx).
 # Default mode: broken homepage URLs. With -r / --repo-url: repository URLs
-# instead (chainable with github-homepage-clear).
+# instead (chainable with github-clear-homepages).
 # By default prints to stdout only. Pass -o to also save a file — bare -o
 # generates <PWD>/broken-homepages-<user>_<timestamp>.txt, -o <path> uses that path.
 #
@@ -152,7 +152,7 @@ check_entry() {
     local code
     code=$(curl -s -o /dev/null -L -w "%{http_code}" \
         --max-time "$TIMEOUT" \
-        -A "Mozilla/5.0 (github-homepage-list-broken)" \
+        -A "Mozilla/5.0 (github-find-repos-with-broken-homepages)" \
         "$url" 2>/dev/null)
     code="${code:-000}"
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-description-list-empty -u <username>                # all repos (forks excluded)
-#   github-description-list-empty -u <username> -v public      # only public
-#   github-description-list-empty -u <username> -v private     # only private
-#   github-description-list-empty -u <username> -F             # include forks
-#   github-description-list-empty -u <username> -o             # also save URLs to auto-named file in $PWD
-#   github-description-list-empty -u <username> -o out.txt     # also save URLs to a specific file
-#   github-description-list-empty --help                       # show help
+#   github-find-repos-without-description -u <username>                # all repos (forks excluded)
+#   github-find-repos-without-description -u <username> -v public      # only public
+#   github-find-repos-without-description -u <username> -v private     # only private
+#   github-find-repos-without-description -u <username> -F             # include forks
+#   github-find-repos-without-description -u <username> -o             # also save URLs to auto-named file in $PWD
+#   github-find-repos-without-description -u <username> -o out.txt     # also save URLs to a specific file
+#   github-find-repos-without-description --help                       # show help
 #
 # Lists repositories that have no description set (empty or null). Fetched in a
 # single API call — no per-repo roundtrips.
