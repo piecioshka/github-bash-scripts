@@ -4,12 +4,16 @@
 #   github-find-repos-with-only-readme -u <username> -v public         # only public
 #   github-find-repos-with-only-readme -u <username> -v private        # only private
 #   github-find-repos-with-only-readme -u <username> -F                # include forks
+#   github-find-repos-with-only-readme -u <username> -p                # also check GitHub Pages status per repo
 #   github-find-repos-with-only-readme -u <username> -o                # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-only-readme -u <username> -o out.txt        # also save URLs to a specific file
 #   github-find-repos-with-only-readme --help                          # show help
 #
 # Lists repositories whose HEAD tree contains exactly a single file: README.md.
 # Useful for finding placeholder or abandoned repos.
+# With -p / --check-pages each found repo is also checked for GitHub Pages
+# (via `gh api repos/<slug>/pages`): enabled shows the Pages URL in green,
+# disabled shows a red "pages off".
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
 # bare -o generates <PWD>/readme-only-<user>_<timestamp>.txt, -o <path> uses
 # that path.
@@ -21,6 +25,7 @@ set -u
 GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
+CHECK_PAGES=0
 OUTPUT_FILE=""
 CONCURRENCY="${CONCURRENCY:-10}"
 
@@ -43,6 +48,8 @@ while [[ $# -gt 0 ]]; do
             VISIBILITY="$2"; shift 2 ;;
         -F|--include-forks)
             INCLUDE_FORKS=1; shift ;;
+        -p|--check-pages)
+            CHECK_PAGES=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                 OUTPUT_FILE="__AUTO__"; shift 1
@@ -80,10 +87,10 @@ fi
 # colors (tty only)
 if [[ -t 1 ]]; then
     C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
+    C_GREEN=$'\033[32m'; C_RED=$'\033[31m'; C_DIM=$'\033[90m'
     C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
 else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
+    C_RESET=""; C_BOLD=""; C_GREEN=""; C_RED=""; C_DIM=""
     C_YELLOW=""; C_BLUE=""; C_BROWN=""
 fi
 
@@ -116,14 +123,22 @@ echo
 
 check_readme_only() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
-    local files
+    local files pages="-" pages_url="-"
     files=$(gh api "repos/$slug/git/trees/HEAD?recursive=1" \
         --jq '[.tree[] | select(.type=="blob") | .path]' 2>/dev/null)
-    if [[ "$files" == '["README.md"]' ]]; then
-        printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
+    [[ "$files" == '["README.md"]' ]] || return 0
+    if [[ "$CHECK_PAGES" == "1" ]]; then
+        # 200 = Pages enabled (grab the URL), 404 = disabled.
+        if pages_url=$(gh api "repos/$slug/pages" --jq '.html_url' 2>/dev/null); then
+            pages="on"
+        else
+            pages="off"; pages_url="-"
+        fi
     fi
+    printf "%s\t%s\t%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived" "$pages" "$pages_url"
 }
 export -f check_readme_only
+export CHECK_PAGES
 
 # Note: TSV fields are passed as separate positional args — BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
@@ -131,13 +146,23 @@ results=$(echo "$repos" | tr '\t' ' ' \
     | xargs -n 4 -P "$CONCURRENCY" bash -c 'check_readme_only "$@"' _)
 
 if [[ -n "$results" ]]; then
-    while IFS=$'\t' read -r slug vis is_fork is_archived; do
+    while IFS=$'\t' read -r slug vis is_fork is_archived pages pages_url; do
         [[ -z "$slug" ]] && continue
+        pages_label=""
+        if [[ "$pages" == "on" ]]; then
+            pages_label=" ${C_GREEN}pages on${C_RESET}  $pages_url"
+        elif [[ "$pages" == "off" ]]; then
+            pages_label=" ${C_RED}pages off${C_RESET}"
+        fi
         badges=""
         [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
         [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
         [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
-        printf "${C_GREEN}✓${C_RESET} %s%s\n" "$slug" "$badges"
+        if [[ "$CHECK_PAGES" == "1" ]]; then
+            printf "${C_GREEN}✓${C_RESET} %-45s%s%s\n" "$slug" "$pages_label" "$badges"
+        else
+            printf "${C_GREEN}✓${C_RESET} %s%s\n" "$slug" "$badges"
+        fi
     done <<< "$(echo "$results" | sort)"
 fi
 
@@ -147,6 +172,10 @@ urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
 found=$(echo "$urls" | grep -c . || true)
 echo
 echo "${C_BOLD}${C_DIM}Found $found/$total repos containing only README.md.${C_RESET}"
+if [[ "$CHECK_PAGES" == "1" ]]; then
+    pages_on=$(echo "$results" | awk -F'\t' '$5=="on"' | grep -c . || true)
+    echo "${C_DIM}$pages_on of them have GitHub Pages enabled.${C_RESET}"
+fi
 
 if [[ -n "$OUTPUT_FILE" ]]; then
     echo "$urls" > "$OUTPUT_FILE"

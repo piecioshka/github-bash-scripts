@@ -82,6 +82,7 @@ CONCURRENCY=20 TIMEOUT=30 github-find-repos-with-broken-homepages -u piecioshka
 github-find-repos-with-only-readme -u piecioshka
 github-find-repos-with-only-readme -u piecioshka -v public
 github-find-repos-with-only-readme -u piecioshka -F
+github-find-repos-with-only-readme -u piecioshka -p                # also check GitHub Pages status (green URL / red "pages off")
 github-find-repos-with-only-readme -u piecioshka -o                # also save repo URLs to auto-named file
 github-find-repos-with-only-readme -u piecioshka -o readme.txt     # also save repo URLs to a specific file
 CONCURRENCY=20 github-find-repos-with-only-readme -u piecioshka
