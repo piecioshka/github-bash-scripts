@@ -13,9 +13,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run ShellCheck
+        # No `severity` override: CONTRIBUTING requires a clean run at the
+        # default severity (info/style included).
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
-        with:
-          severity: warning
         env:
           # Follow the shared/ libraries sourced by the scripts in bin/.
           SHELLCHECK_OPTS: -x
+
+  usage-smoke:
+    name: Usage smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every script prints its usage for --help
+        run: |
+          set -e
+          for script in bin/*; do
+            "$script" --help > /dev/null
+            echo "OK: $script"
+          done
