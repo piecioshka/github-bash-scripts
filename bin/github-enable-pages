@@ -2,8 +2,8 @@
 # Usage:
 #   github-enable-pages -f links.txt                     # repos from a file
 #   echo "https://github.com/o/r" | github-enable-pages  # repos from stdin
-#   BRANCH=gh-pages github-enable-pages -f links.txt     # custom source branch
-#   BRANCH=main PATH_IN_REPO=/docs github-enable-pages -f links.txt
+#   github-enable-pages -f links.txt -b gh-pages         # custom source branch (default: main)
+#   github-enable-pages -f links.txt -b main -p /docs    # custom source path (default: /)
 #   DRY_RUN=1 github-enable-pages -f links.txt           # show what would be done
 #   github-enable-pages --help                           # show help
 #
@@ -14,17 +14,13 @@
 #   - https://github.com/owner/repo
 #   - https://owner.github.io/repo/
 #
-# Env:
-#   BRANCH          Pages source branch (default: main)
-#   PATH_IN_REPO    Pages source path   (default: /)
-#
 # Requires: gh CLI (authenticated) with admin access on the repos.
 
 set -u
 
 DRY_RUN="${DRY_RUN:-0}"
-BRANCH="${BRANCH:-main}"
-PATH_IN_REPO="${PATH_IN_REPO:-/}"
+BRANCH="main"
+PATH_IN_REPO="/"
 INPUT_FILE=""
 
 show_usage() {
@@ -41,6 +37,12 @@ while [[ $# -gt 0 ]]; do
         -f|--file)
             [[ -z "${2:-}" ]] && { echo "ERROR: --file requires a path" >&2; exit 1; }
             INPUT_FILE="$2"; shift 2 ;;
+        -b|--branch)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --branch requires a branch name" >&2; exit 1; }
+            BRANCH="$2"; shift 2 ;;
+        -p|--path)
+            [[ -z "${2:-}" ]] && { echo "ERROR: --path requires a path" >&2; exit 1; }
+            PATH_IN_REPO="$2"; shift 2 ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)

@@ -164,10 +164,10 @@ All destructive operations support `DRY_RUN=1` to preview changes.
 
 ```bash
 # Enable GitHub Pages for each repo (source: main / root by default)
-github-enable-pages repos.txt
+github-enable-pages -f repos.txt
 cat repos.txt | github-enable-pages
-BRANCH=gh-pages github-enable-pages repos.txt
-BRANCH=main PATH_IN_REPO=/docs github-enable-pages repos.txt
+github-enable-pages -f repos.txt -b gh-pages             # custom source branch
+github-enable-pages -f repos.txt -b main -p /docs        # custom source path
 
 # Disable GitHub Pages (deletes the 'gh-pages' branch; refuses other branches)
 DRY_RUN=1 github-disable-pages -f repos.txt
