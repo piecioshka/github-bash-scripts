@@ -100,13 +100,13 @@ github-find-repos-with-license -u piecioshka -o licensed.txt  # also save repo U
 CONCURRENCY=20 github-find-repos-with-license -u piecioshka
 
 # Search across repo metadata (name, description, homepage, topics, language)
-github-find-user-repos -u piecioshka -q angular
-github-find-user-repos -u piecioshka -q angular -v public
-github-find-user-repos -u piecioshka -q angular -F
-github-find-user-repos -u piecioshka -q TypeScript -c       # case-sensitive
-github-find-user-repos -u piecioshka -q '^workshop-.*2019' -E   # regex
-github-find-user-repos -u piecioshka -q react -o               # also save repo URLs to auto-named file
-github-find-user-repos -u piecioshka -q react -o matches.txt   # also save repo URLs to a specific file
+github-find-repos-by-metadata -u piecioshka -q angular
+github-find-repos-by-metadata -u piecioshka -q angular -v public
+github-find-repos-by-metadata -u piecioshka -q angular -F
+github-find-repos-by-metadata -u piecioshka -q TypeScript -c       # case-sensitive
+github-find-repos-by-metadata -u piecioshka -q '^workshop-.*2019' -E   # regex
+github-find-repos-by-metadata -u piecioshka -q react -o               # also save repo URLs to auto-named file
+github-find-repos-by-metadata -u piecioshka -q react -o matches.txt   # also save repo URLs to a specific file
 
 # List repos with the wiki feature enabled, together with their wiki page counts
 github-find-repos-with-wikis -u piecioshka
@@ -203,7 +203,7 @@ github-find-repos-with-homepages -u piecioshka -r -o broken.txt
 github-clear-homepages -f broken.txt --force
 
 # 2) Find repos matching a query, then scan them for secrets
-github-find-user-repos -u piecioshka -q legacy -o legacy.txt
+github-find-repos-by-metadata -u piecioshka -q legacy -o legacy.txt
 github-scan-secrets -f legacy.txt
 
 # 3) Get all repos with Pages, then disable Pages for a curated subset
@@ -223,7 +223,7 @@ github-disable-wikis -f empty-wikis.txt
 
 - `bash` 4+ / macOS default bash works
 - [`gh`](https://cli.github.com/) — authenticated (`gh auth login`)
-- `jq` — only for `github-find-user-repos`
+- `jq` — only for `github-find-repos-by-metadata`
 - `curl`
 - `gitleaks` (`brew install gitleaks`) — only for `github-scan-secrets`
 - `git` — for `github-scan-secrets` and `github-find-repos-with-wikis` (wiki page counting)

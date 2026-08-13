@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-find-user-repos -u <user> -q <query>                  # search all repos
-#   github-find-user-repos -u <user> -q <query> -v public        # only public
-#   github-find-user-repos -u <user> -q <query> -v private       # only private
-#   github-find-user-repos -u <user> -q <query> -F               # include forks
-#   github-find-user-repos -u <user> -q <query> -c               # case-sensitive
-#   github-find-user-repos -u <user> -q <query> -E               # treat query as regex
-#   github-find-user-repos -u <user> -q <query> -o               # also save repo URLs to auto-named file
-#   github-find-user-repos -u <user> -q <query> -o out.txt       # also save repo URLs to a specific file
-#   github-find-user-repos --help                                # show help
+#   github-find-repos-by-metadata -u <user> -q <query>                  # search all repos
+#   github-find-repos-by-metadata -u <user> -q <query> -v public        # only public
+#   github-find-repos-by-metadata -u <user> -q <query> -v private       # only private
+#   github-find-repos-by-metadata -u <user> -q <query> -F               # include forks
+#   github-find-repos-by-metadata -u <user> -q <query> -c               # case-sensitive
+#   github-find-repos-by-metadata -u <user> -q <query> -E               # treat query as regex
+#   github-find-repos-by-metadata -u <user> -q <query> -o               # also save repo URLs to auto-named file
+#   github-find-repos-by-metadata -u <user> -q <query> -o out.txt       # also save repo URLs to a specific file
+#   github-find-repos-by-metadata --help                                # show help
 #
 # Searches across repo metadata (name, description, homepage, topics, language).
 # Case-insensitive substring match by default. Use -E to interpret the query as
