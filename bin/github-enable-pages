@@ -92,6 +92,8 @@ enable_pages() {
 
 [[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
 
+validate_input_source
+
 FAILED=0
 while read -r url; do
     enable_pages "$url"

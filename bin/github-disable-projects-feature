@@ -136,6 +136,8 @@ disable_projects() {
 [[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
 [[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode - will disable Projects even if projects exist ==${C_RESET}"
 
+validate_input_source
+
 FAILED=0
 while read -r url; do
     disable_projects "$url"

@@ -124,6 +124,22 @@ format_badges() {
     printf "%s" "$badges"
 }
 
+# validate_input_source - input_source is consumed via a process substitution
+# (`while ... done < <(input_source ...)`), where its `exit 1` would die in the
+# subshell and the script would still finish with exit 0. Call this in the
+# MAIN shell before the loop: it performs the same error checks (missing input
+# file, no source at all) where exiting actually terminates the script.
+validate_input_source() {
+    if [[ -n "$INPUT_FILE" && ! -f "$INPUT_FILE" ]]; then
+        echo "ERROR: file does not exist: $INPUT_FILE" >&2
+        exit 1
+    fi
+    if [[ ${#POSITIONAL[@]} -eq 0 && -z "$INPUT_FILE" && -z "$GH_USER" && -t 0 ]]; then
+        show_usage
+        exit 1
+    fi
+}
+
 # input_source [extra_json_fields] [extra_jq_select] [note]
 # Emits one repo URL per line, taken from the FIRST available source:
 # positional args -> -f file -> -u user (gh repo list) -> stdin.

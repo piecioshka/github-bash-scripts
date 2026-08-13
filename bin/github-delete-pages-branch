@@ -134,6 +134,8 @@ else
     echo "${C_RED}==          preview first with: DRY_RUN=1 github-delete-pages-branch ... ==${C_RESET}"
 fi
 
+validate_input_source
+
 FAILED=0
 while read -r url; do
     delete_pages_branch "$url"
