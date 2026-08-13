@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-list-pages -u <username>                      # all repos (forks excluded)
-#   github-list-pages -u <username> -v public            # only public
-#   github-list-pages -u <username> -v private           # only private
-#   github-list-pages -u <username> -F                   # include forks
-#   github-list-pages -u <username> -r                   # output repo URLs (github.com/owner/repo)
-#   github-list-pages -u <username> -o                   # also save URLs to auto-named file in $PWD
-#   github-list-pages -u <username> -o pages.txt         # also save URLs to a specific file
-#   github-list-pages --help                             # show help
+#   github-find-repos-with-pages -u <username>                      # all repos (forks excluded)
+#   github-find-repos-with-pages -u <username> -v public            # only public
+#   github-find-repos-with-pages -u <username> -v private           # only private
+#   github-find-repos-with-pages -u <username> -F                   # include forks
+#   github-find-repos-with-pages -u <username> -r                   # output repo URLs (github.com/owner/repo)
+#   github-find-repos-with-pages -u <username> -o                   # also save URLs to auto-named file in $PWD
+#   github-find-repos-with-pages -u <username> -o pages.txt         # also save URLs to a specific file
+#   github-find-repos-with-pages --help                             # show help
 #
 # Lists repositories that have GitHub Pages enabled. Default mode: Pages URLs
 # (owner.github.io/repo). With -r / --repo-url: repository URLs.

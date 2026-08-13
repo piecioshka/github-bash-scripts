@@ -51,14 +51,14 @@ brew install gitleaks   # only if you plan to use bin/github-scan-secrets
 ```bash
 # List repos that have GitHub Pages enabled
 # TTY output includes a source badge: [📁 <branch>:<path>] or [⚙️ actions]
-github-list-pages -u piecioshka
-github-list-pages -u piecioshka -v public
-github-list-pages -u piecioshka -v private
-github-list-pages -u piecioshka -F                       # include forks
-github-list-pages -u piecioshka -r                       # output repo URLs instead of Pages URLs
-github-list-pages -u piecioshka -o                       # also save to auto-named file in $PWD
-github-list-pages -u piecioshka -o my-pages.txt          # also save to a specific file
-CONCURRENCY=20 github-list-pages -u piecioshka
+github-find-repos-with-pages -u piecioshka
+github-find-repos-with-pages -u piecioshka -v public
+github-find-repos-with-pages -u piecioshka -v private
+github-find-repos-with-pages -u piecioshka -F                       # include forks
+github-find-repos-with-pages -u piecioshka -r                       # output repo URLs instead of Pages URLs
+github-find-repos-with-pages -u piecioshka -o                       # also save to auto-named file in $PWD
+github-find-repos-with-pages -u piecioshka -o my-pages.txt          # also save to a specific file
+CONCURRENCY=20 github-find-repos-with-pages -u piecioshka
 
 # List repos with a homepage set and check each URL over HTTP (OK / BROKEN)
 github-find-repos-with-homepages -u piecioshka
@@ -207,7 +207,7 @@ github-find-repos-by-metadata -u piecioshka -q legacy -o legacy.txt
 github-scan-secrets -f legacy.txt
 
 # 3) Get all repos with Pages, then disable Pages for a curated subset
-github-list-pages -u piecioshka -r -o all-pages.txt
+github-find-repos-with-pages -u piecioshka -r -o all-pages.txt
 # ...edit all-pages.txt to keep only the ones you want disabled...
 DRY_RUN=1 github-disable-pages -f all-pages.txt
 github-disable-pages -f all-pages.txt

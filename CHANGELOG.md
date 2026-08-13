@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Renamed `github-list-pages` to `github-find-repos-with-pages`, retiring the last `list` verb — every read-only script now lives in the `github-find-repos-*` family.
 - 2026-08-13 — Unified the `-u` placeholder to `<username>` across every usage header, error message and auto-file-name description (previously a mix of `<user>` and `<username>`).
 - 2026-08-13 — Renamed `github-find-user-repos` to `github-find-repos-by-metadata` — the name now says what the script searches through (name, description, homepage, topics, language), not whose repos.
 - 2026-08-13 — Removed `github-list-homepages`: its behaviour lives on as `github-find-repos-with-homepages -n` / `--no-check`, which lists the repositories with a homepage straight from metadata without the HTTP round-trips.
