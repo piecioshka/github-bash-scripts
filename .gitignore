@@ -1,1 +1,7 @@
 tmp/
+
+# github-scan-secrets reports (may reference sensitive findings)
+scan-results/
+
+# auto-named output files from the -o flag of the find scripts
+*_20??-??-??_??-??-??.txt
