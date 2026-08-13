@@ -8,37 +8,23 @@
 
 Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, wikis, projects, descriptions and secrets.
 
+## Features
+
+- 🔎 Nine `find` scripts to audit repositories in bulk: GitHub Pages, homepages (with HTTP status checks), wikis, Projects, branches, LICENSE files, README-only placeholders, missing descriptions and free-text metadata search
+- 🧹 Write scripts to clean up in bulk: enable Pages, delete leftover `gh-pages` branches, clear homepages, disable empty wikis and unused Projects
+- 🕵️ Secret scanning of the full git history of each repo (`gitleaks` + a grep pattern), with redacted reports saved to an owner-only directory
+- 🛡️ Safety first: `--dry-run`/`DRY_RUN=1` previews, narrow matching by default with explicit `--force` for anything broader, and hard guards around destructive actions
+- ⛓️ Chainable by design: plain URL lists on stdout and in `-o` files feed straight into the next script
+- 🚦 CI-friendly exit codes: non-zero on failures, broken homepages and secret findings
+- ⚡ Parallel per-repo checks (`CONCURRENCY`), colored columnar TTY output and repo state badges (`[🔐 private]`, `[🍴 fork]`, `[📦 archived]`)
+- 🧩 One shared bash library (`shared/`), `shellcheck -x` clean, no dependencies beyond `gh`, `jq`, `curl`, `git` and `gitleaks`
+
 ## Repository layout
 
 - [`bin/`](bin/) - the executable scripts (add this directory to `PATH`)
 - [`shared/`](shared/) - libraries sourced by every script: [`__shared.sh`](shared/__shared.sh) (common helpers) and [`__colors.sh`](shared/__colors.sh) (TTY colors)
 
 The scripts locate `shared/` relative to their own path, so keep the clone intact - copying a single file out of `bin/` breaks it.
-
-## Shared conventions
-
-- `-u <username>` - scope to a user's repos (via `gh repo list`, up to 1000 repos)
-- `-f <file>` - input file with URLs (one per line; lines starting with `#` are ignored)
-- stdin - pipe URLs in
-- positional slugs - scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wiki owner/repo`)
-- input priority (scripts that consume a repo list): positional args → `-f <file>` → `-u <username>` → stdin; `github-scan-secrets` combines all given sources and deduplicates
-- `-v public|private|all` - visibility filter (default: `all`)
-- `-F/--include-forks` - include forks (default: excluded)
-- `-e` - narrow the output to the "problematic" subset: `--only-broken` (homepage) or `--only-unused` (wiki, projects)
-- `-r/--repo-url` - output repository URLs instead of the script's default URLs (Pages/branch/homepage)
-- `DRY_RUN=1` or `--dry-run` - preview without making changes (all write scripts). Any `DRY_RUN` value other than `0`, `false`, `no`, `off` or empty enables the dry run, so a typo can never run a destructive action for real
-- Colored columnar output when writing to a TTY
-- Repo state badges on TTY: `[🔐 private]` (yellow), `[🍴 fork]` (blue), `[📦 archived]` (brown) - shown only for non-default states, never written to `-o` output files
-- `find` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
-
-Run any script with `--help` to see its full usage.
-
-### Exit codes
-
-- write scripts (`github-clear-homepage`, `github-enable-pages`, `github-delete-pages-branch`, `github-disable-wiki`, `github-disable-projects-feature`): `0` = no failures, `1` = at least one repo ended in a `FAIL` row
-- `github-find-repos-with-homepage`: `0` = all checked homepages OK (or `-n`), `1` = at least one `BROKEN`
-- `github-scan-secrets`: `0` = clean, `1` = at least one scan failed (e.g. clone error), `2` = scans succeeded but findings were reported
-- other `find` scripts: `0` (inconclusive per-repo checks are reported as `WARN` on stderr)
 
 ## Installation
 
@@ -245,6 +231,31 @@ github-find-repos-with-wiki -u piecioshka -e -o empty-wikis.txt
 DRY_RUN=1 github-disable-wiki -f empty-wikis.txt
 github-disable-wiki -f empty-wikis.txt
 ```
+
+## Shared conventions
+
+- `-u <username>` - scope to a user's repos (via `gh repo list`, up to 1000 repos)
+- `-f <file>` - input file with URLs (one per line; lines starting with `#` are ignored)
+- stdin - pipe URLs in
+- positional slugs - scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wiki owner/repo`)
+- input priority (scripts that consume a repo list): positional args → `-f <file>` → `-u <username>` → stdin; `github-scan-secrets` combines all given sources and deduplicates
+- `-v public|private|all` - visibility filter (default: `all`)
+- `-F/--include-forks` - include forks (default: excluded)
+- `-e` - narrow the output to the "problematic" subset: `--only-broken` (homepage) or `--only-unused` (wiki, projects)
+- `-r/--repo-url` - output repository URLs instead of the script's default URLs (Pages/branch/homepage)
+- `DRY_RUN=1` or `--dry-run` - preview without making changes (all write scripts). Any `DRY_RUN` value other than `0`, `false`, `no`, `off` or empty enables the dry run, so a typo can never run a destructive action for real
+- Colored columnar output when writing to a TTY
+- Repo state badges on TTY: `[🔐 private]` (yellow), `[🍴 fork]` (blue), `[📦 archived]` (brown) - shown only for non-default states, never written to `-o` output files
+- `find` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
+
+Run any script with `--help` to see its full usage.
+
+### Exit codes
+
+- write scripts (`github-clear-homepage`, `github-enable-pages`, `github-delete-pages-branch`, `github-disable-wiki`, `github-disable-projects-feature`): `0` = no failures, `1` = at least one repo ended in a `FAIL` row
+- `github-find-repos-with-homepage`: `0` = all checked homepages OK (or `-n`), `1` = at least one `BROKEN`
+- `github-scan-secrets`: `0` = clean, `1` = at least one scan failed (e.g. clone error), `2` = scans succeeded but findings were reported
+- other `find` scripts: `0` (inconclusive per-repo checks are reported as `WARN` on stderr)
 
 ## Requirements
 
