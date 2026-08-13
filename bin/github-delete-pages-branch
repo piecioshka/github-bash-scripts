@@ -66,10 +66,25 @@ delete_pages_branch() {
         return
     fi
 
-    # Check if Pages enabled and fetch source branch
-    local branch
-    if ! branch=$(gh api "repos/$slug/pages" --jq '.source.branch // "gh-pages"' 2>/dev/null); then
+    # Check if Pages is enabled and read its exact source. Deliberately no
+    # default value here: an absent .source.branch (e.g. Pages built by a
+    # GitHub Actions workflow) must NOT be treated as 'gh-pages'.
+    local line build_type branch
+    if ! line=$(gh api "repos/$slug/pages" \
+        --jq '[(.build_type // ""), (.source.branch // "")] | @tsv' 2>/dev/null); then
         print_row "NONE" "$slug" "Pages not enabled"
+        return
+    fi
+    IFS=$'\t' read -r build_type branch <<< "$line"
+
+    # SAFETY: Pages built by GitHub Actions have no source branch to delete -
+    # a 'gh-pages' branch that happens to exist may hold unrelated content.
+    if [[ "$build_type" == "workflow" ]]; then
+        print_row "SKIP" "$slug" "Pages built via GitHub Actions (no source branch) - refusing to delete"
+        return
+    fi
+    if [[ -z "$branch" ]]; then
+        print_row "SKIP" "$slug" "Pages source branch unknown - refusing to delete"
         return
     fi
 
