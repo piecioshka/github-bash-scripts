@@ -11,7 +11,7 @@
 # Lists repositories that have no description set (empty or null). Fetched in a
 # single API call — no per-repo roundtrips.
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/description-empty-<user>_<timestamp>.txt, -o <path>
+# bare -o generates <PWD>/description-empty-<username>_<timestamp>.txt, -o <path>
 # uses that path.
 #
 # Requires: gh CLI (authenticated)
@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$GH_USER" ]]; then
-    echo "ERROR: -u <user> is required" >&2
+    echo "ERROR: -u <username> is required" >&2
     show_usage
     exit 1
 fi

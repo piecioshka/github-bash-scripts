@@ -15,7 +15,7 @@
 # With -n / --node-only, also requires a root package.json (Node.js projects).
 # Handy for spotting repos that carry a license file you may want to drop.
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/licenses-<user>_<timestamp>.txt, -o <path> uses
+# bare -o generates <PWD>/licenses-<username>_<timestamp>.txt, -o <path> uses
 # that path.
 #
 # Requires: gh CLI (authenticated)
@@ -64,7 +64,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$GH_USER" ]]; then
-    echo "ERROR: -u <user> is required" >&2
+    echo "ERROR: -u <username> is required" >&2
     show_usage
     exit 1
 fi

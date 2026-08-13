@@ -15,7 +15,7 @@
 # Default output: branch URLs (github.com/owner/repo/tree/<branch>).
 # With -r / --repo-url: repository URLs.
 # By default prints to stdout only. Pass -o to also save a file — bare -o
-# generates <PWD>/branches-<branch>[-repos]-<user>_<timestamp>.txt,
+# generates <PWD>/branches-<branch>[-repos]-<username>_<timestamp>.txt,
 # -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated)
@@ -68,7 +68,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$GH_USER" ]]; then
-    echo "ERROR: -u <user> is required" >&2
+    echo "ERROR: -u <username> is required" >&2
     show_usage
     exit 1
 fi

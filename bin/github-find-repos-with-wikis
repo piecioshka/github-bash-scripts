@@ -16,7 +16,7 @@
 # such repo, so `git ls-remote` returns no refs. Page counts come from a
 # blobless, no-checkout clone of the wiki repo (trees only, no file contents).
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/wikis-<user>_<timestamp>.txt (wikis-unused-<user>_… with
+# bare -o generates <PWD>/wikis-<username>_<timestamp>.txt (wikis-unused-<username>_… with
 # --only-unused), -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated), git
@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$GH_USER" ]]; then
-    echo "ERROR: -u <user> is required" >&2
+    echo "ERROR: -u <username> is required" >&2
     show_usage
     exit 1
 fi

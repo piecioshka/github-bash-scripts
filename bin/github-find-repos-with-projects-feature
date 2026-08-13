@@ -16,8 +16,8 @@
 # Linked-project count is read from the GraphQL `projectsV2` field
 # (Projects v2); legacy classic project boards are not counted.
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/projects-<user>_<timestamp>.txt
-# (projects-unused-<user>_… with --only-unused), -o <path> uses that path.
+# bare -o generates <PWD>/projects-<username>_<timestamp>.txt
+# (projects-unused-<username>_… with --only-unused), -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated, with read:project scope)
 
@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$GH_USER" ]]; then
-    echo "ERROR: -u <user> is required" >&2
+    echo "ERROR: -u <username> is required" >&2
     show_usage
     exit 1
 fi

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-find-repos-by-metadata -u <user> -q <query>                  # search all repos
-#   github-find-repos-by-metadata -u <user> -q <query> -v public        # only public
-#   github-find-repos-by-metadata -u <user> -q <query> -v private       # only private
-#   github-find-repos-by-metadata -u <user> -q <query> -F               # include forks
-#   github-find-repos-by-metadata -u <user> -q <query> -c               # case-sensitive
-#   github-find-repos-by-metadata -u <user> -q <query> -E               # treat query as regex
-#   github-find-repos-by-metadata -u <user> -q <query> -o               # also save repo URLs to auto-named file
-#   github-find-repos-by-metadata -u <user> -q <query> -o out.txt       # also save repo URLs to a specific file
+#   github-find-repos-by-metadata -u <username> -q <query>                  # search all repos
+#   github-find-repos-by-metadata -u <username> -q <query> -v public        # only public
+#   github-find-repos-by-metadata -u <username> -q <query> -v private       # only private
+#   github-find-repos-by-metadata -u <username> -q <query> -F               # include forks
+#   github-find-repos-by-metadata -u <username> -q <query> -c               # case-sensitive
+#   github-find-repos-by-metadata -u <username> -q <query> -E               # treat query as regex
+#   github-find-repos-by-metadata -u <username> -q <query> -o               # also save repo URLs to auto-named file
+#   github-find-repos-by-metadata -u <username> -q <query> -o out.txt       # also save repo URLs to a specific file
 #   github-find-repos-by-metadata --help                                # show help
 #
 # Searches across repo metadata (name, description, homepage, topics, language).
@@ -15,7 +15,7 @@
 # an extended regex. Use -c for case-sensitive matching.
 #
 # By default prints matched rows to stdout only. Pass -o to also save unique
-# repo URLs — bare -o generates <PWD>/search-<user>-<query>_<timestamp>.txt,
+# repo URLs — bare -o generates <PWD>/search-<username>-<query>_<timestamp>.txt,
 # -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated), jq
@@ -70,7 +70,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$GH_USER" ]]; then
-    echo "ERROR: -u <user> is required" >&2; exit 1
+    echo "ERROR: -u <username> is required" >&2; exit 1
 fi
 if [[ -z "$QUERY" ]]; then
     echo "ERROR: -q <query> is required" >&2; exit 1

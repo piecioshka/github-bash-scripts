@@ -18,9 +18,9 @@
 # without touching the homepages over HTTP (-e makes no sense then).
 # Default mode: homepage URLs. With -r / --repo-url: repository URLs.
 # By default prints to stdout only. Pass -o to also save a file — bare -o
-# generates <PWD>/homepages-checked[-repos]-<user>_<timestamp>.txt
-# (homepages-broken[-repos]-<user>_… with --only-broken and
-# homepages[-repos]-<user>_… with --no-check), -o <path> uses that path.
+# generates <PWD>/homepages-checked[-repos]-<username>_<timestamp>.txt
+# (homepages-broken[-repos]-<username>_… with --only-broken and
+# homepages[-repos]-<username>_… with --no-check), -o <path> uses that path.
 #
 # Env:
 #   CONCURRENCY=10   parallelism for URL checks
@@ -79,7 +79,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$GH_USER" ]]; then
-    echo "ERROR: -u <user> is required" >&2
+    echo "ERROR: -u <username> is required" >&2
     show_usage
     exit 1
 fi
