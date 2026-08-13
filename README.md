@@ -163,10 +163,10 @@ github-enable-pages -f repos.txt -b gh-pages             # custom source branch
 github-enable-pages -f repos.txt -b main -p /docs        # custom source path
 
 # Disable GitHub Pages (deletes the 'gh-pages' branch; refuses other branches)
-DRY_RUN=1 github-disable-pages -f repos.txt
-github-disable-pages -f repos.txt
-cat repos.txt | github-disable-pages
-github-disable-pages owner/repo another/repo             # positional slugs
+DRY_RUN=1 github-delete-pages-branch -f repos.txt
+github-delete-pages-branch -f repos.txt
+cat repos.txt | github-delete-pages-branch
+github-delete-pages-branch owner/repo another/repo             # positional slugs
 
 # Clear the repo website/homepage URL
 github-clear-homepage -u piecioshka                      # only clears *.github.io
@@ -209,8 +209,8 @@ github-scan-secrets -f legacy.txt
 # 3) Get all repos with Pages, then disable Pages for a curated subset
 github-find-repos-with-pages -u piecioshka -r -o all-pages.txt
 # ...edit all-pages.txt to keep only the ones you want disabled...
-DRY_RUN=1 github-disable-pages -f all-pages.txt
-github-disable-pages -f all-pages.txt
+DRY_RUN=1 github-delete-pages-branch -f all-pages.txt
+github-delete-pages-branch -f all-pages.txt
 
 # 4) Find repos with empty wikis, review the list, then disable those wikis
 github-find-repos-with-wiki -u piecioshka -e -o empty-wikis.txt

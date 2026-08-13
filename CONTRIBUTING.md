@@ -76,7 +76,7 @@ comment and a rationale.
 Some behaviours are load-bearing safety guards. Do not relax them without a
 strong reason and a PR discussion:
 
-- `github-disable-pages` only deletes the `gh-pages` branch. It refuses any
+- `github-delete-pages-branch` only deletes the `gh-pages` branch. It refuses any
   other branch name (even if the Pages source points there)
 - Destructive scripts default to narrow matching (e.g. `github-clear-homepage`
   only clears URLs matching `*.github.io`). Broader matching must be opt-in

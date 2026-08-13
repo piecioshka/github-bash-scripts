@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-disable-pages -f links.txt                    # repos from a file
-#   echo "https://github.com/o/r" | github-disable-pages # repos from stdin
-#   github-disable-pages owner/repo another/repo         # positional slugs
-#   DRY_RUN=1 github-disable-pages -f links.txt          # show what would be done
-#   github-disable-pages --help                          # show help
+#   github-delete-pages-branch -f links.txt                    # repos from a file
+#   echo "https://github.com/o/r" | github-delete-pages-branch # repos from stdin
+#   github-delete-pages-branch owner/repo another/repo         # positional slugs
+#   DRY_RUN=1 github-delete-pages-branch -f links.txt          # show what would be done
+#   github-delete-pages-branch --help                          # show help
 #
-# Disables GitHub Pages for each repo on the list.
+# Disables GitHub Pages for each repo on the list by DELETING the 'gh-pages'
+# branch. This is NOT a symmetric undo of github-enable-pages (which only
+# changes configuration): the branch and its history are permanently removed.
 #
 # Actions per repo (in order):
-#   1. Delete the Pages source branch (usually 'gh-pages') - stops the site serving.
+#   1. Delete the 'gh-pages' branch - stops the site serving.
 #   2. Try DELETE /repos/.../pages - often returns 422 for legacy setups; non-fatal.
+#
+# Safety guards: only the 'gh-pages' branch is ever deleted. Repos whose Pages
+# source is another branch, is unknown, or whose Pages are built by GitHub
+# Actions (build_type=workflow) are refused.
 #
 # Accepts both URL formats (one per line, lines starting with # are ignored):
 #   - https://github.com/owner/repo
 #   - https://owner.github.io/repo/
 #
-# WARNING: branch deletion is destructive - the source branch is removed.
+# WARNING: branch deletion is DESTRUCTIVE and IRREVERSIBLE (unless you have a
+# local copy of the branch). Preview with DRY_RUN=1 first.
 # Requires: gh CLI (authenticated) with admin access on the repos.
 
 set -u
@@ -49,7 +56,7 @@ done
 
 require_cmd gh "brew install gh"
 
-disable_pages() {
+delete_pages_branch() {
     local url="$1"
     local slug
     slug=$(url_to_slug "$url")
@@ -100,11 +107,16 @@ disable_pages() {
     fi
 }
 
-[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
+if [[ "$DRY_RUN" == "1" ]]; then
+    echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
+else
+    echo "${C_RED}== WARNING: this PERMANENTLY deletes the 'gh-pages' branch in the listed repos ==${C_RESET}"
+    echo "${C_RED}==          preview first with: DRY_RUN=1 github-delete-pages-branch ... ==${C_RESET}"
+fi
 
 input_source \
     | grep -vE '^[[:space:]]*(#|$)' \
     | grep -Eo 'https?://[^ ]+' \
     | while read -r url; do
-        disable_pages "$url"
+        delete_pages_branch "$url"
     done
