@@ -151,10 +151,18 @@ grep_flags=(-E)
 [[ "$REGEX" == "0" ]] && grep_flags=(-F)
 [[ "$REGEX" == "0" && "$CASE_SENSITIVE" == "0" ]] && grep_flags=(-Fi)
 
-# Filter to lines where the value column contains the query
-matches=$(echo "$triples" | awk -F'\t' '{print $3 "\t" $0}' \
-    | grep "${grep_flags[@]}" -- "$QUERY" \
-    | cut -f2-)
+# Filter to rows whose VALUE column matches the query. grep must see the value
+# column alone - matching against the whole line would also hit the slug and
+# the field-name columns (e.g. -q description would match every repo that has
+# any description). The matching line numbers then select rows from the TSV.
+matched_nums=$(echo "$triples" | cut -f3 \
+    | grep -n "${grep_flags[@]}" -- "$QUERY" | cut -d: -f1)
+matches=""
+if [[ -n "$matched_nums" ]]; then
+    matches=$(echo "$triples" | awk -F'\t' \
+        'NR==FNR { want[$1] = 1; next } FNR in want' \
+        <(printf '%s\n' "$matched_nums") /dev/stdin)
+fi
 
 if [[ -z "$matches" ]]; then
     echo "No matches across $total_repos repos."
