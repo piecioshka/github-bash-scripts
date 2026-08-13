@@ -9,7 +9,7 @@ All scripts live in [`bin/`](bin/). Most share the same conventions:
 - `-u <username>` — scope to a user's repos (via `gh repo list`)
 - `-f <file>` — input file with URLs (one per line; lines starting with `#` are ignored)
 - stdin — pipe URLs in
-- positional slugs — scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wikis owner/repo`)
+- positional slugs — scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wiki owner/repo`)
 - `-v public|private|all` — visibility filter (where applicable)
 - `-F/--include-forks` — include forks (default: excluded)
 - `DRY_RUN=1` — preview without making changes (for destructive actions)
@@ -61,15 +61,15 @@ github-find-repos-with-pages -u piecioshka -o my-pages.txt          # also save 
 CONCURRENCY=20 github-find-repos-with-pages -u piecioshka
 
 # List repos with a homepage set and check each URL over HTTP (OK / BROKEN)
-github-find-repos-with-homepages -u piecioshka
-github-find-repos-with-homepages -u piecioshka -v public
-github-find-repos-with-homepages -u piecioshka -F
-github-find-repos-with-homepages -u piecioshka -e             # only broken homepages (non-2xx/3xx)
-github-find-repos-with-homepages -u piecioshka -e -r          # repo URLs of broken ones (chainable)
-github-find-repos-with-homepages -u piecioshka -n             # just list, skip the HTTP check
-github-find-repos-with-homepages -u piecioshka -o             # also save to auto-named file in $PWD
-github-find-repos-with-homepages -u piecioshka -o broken.txt  # also save to a specific file
-CONCURRENCY=20 TIMEOUT=30 github-find-repos-with-homepages -u piecioshka
+github-find-repos-with-homepage -u piecioshka
+github-find-repos-with-homepage -u piecioshka -v public
+github-find-repos-with-homepage -u piecioshka -F
+github-find-repos-with-homepage -u piecioshka -e             # only broken homepages (non-2xx/3xx)
+github-find-repos-with-homepage -u piecioshka -e -r          # repo URLs of broken ones (chainable)
+github-find-repos-with-homepage -u piecioshka -n             # just list, skip the HTTP check
+github-find-repos-with-homepage -u piecioshka -o             # also save to auto-named file in $PWD
+github-find-repos-with-homepage -u piecioshka -o broken.txt  # also save to a specific file
+CONCURRENCY=20 TIMEOUT=30 github-find-repos-with-homepage -u piecioshka
 
 # List repos that contain only a single README.md file (placeholders)
 github-find-repos-with-only-readme -u piecioshka
@@ -109,13 +109,13 @@ github-find-repos-by-metadata -u piecioshka -q react -o               # also sav
 github-find-repos-by-metadata -u piecioshka -q react -o matches.txt   # also save repo URLs to a specific file
 
 # List repos with the wiki feature enabled, together with their wiki page counts
-github-find-repos-with-wikis -u piecioshka
-github-find-repos-with-wikis -u piecioshka -v public
-github-find-repos-with-wikis -u piecioshka -F
-github-find-repos-with-wikis -u piecioshka -e                  # only wikis with no pages (empty)
-github-find-repos-with-wikis -u piecioshka -o                  # also save repo URLs to auto-named file
-github-find-repos-with-wikis -u piecioshka -o wikis.txt        # also save repo URLs to a specific file
-CONCURRENCY=20 github-find-repos-with-wikis -u piecioshka
+github-find-repos-with-wiki -u piecioshka
+github-find-repos-with-wiki -u piecioshka -v public
+github-find-repos-with-wiki -u piecioshka -F
+github-find-repos-with-wiki -u piecioshka -e                  # only wikis with no pages (empty)
+github-find-repos-with-wiki -u piecioshka -o                  # also save repo URLs to auto-named file
+github-find-repos-with-wiki -u piecioshka -o wikis.txt        # also save repo URLs to a specific file
+CONCURRENCY=20 github-find-repos-with-wiki -u piecioshka
 
 # List repos with the Projects feature enabled, together with linked-project counts
 github-find-repos-with-projects-feature -u piecioshka
@@ -169,23 +169,23 @@ cat repos.txt | github-disable-pages
 github-disable-pages owner/repo another/repo             # positional slugs
 
 # Clear the repo website/homepage URL
-github-clear-homepages -u piecioshka                      # only clears *.github.io
-github-clear-homepages -u piecioshka -v public
-github-clear-homepages -u piecioshka -v private
-github-clear-homepages -u piecioshka -F
-github-clear-homepages -u piecioshka --force              # clears ANY homepage
-github-clear-homepages -f repos.txt
-cat repos.txt | github-clear-homepages
-github-clear-homepages owner/repo another/repo            # positional slugs
-DRY_RUN=1 github-clear-homepages -u piecioshka
+github-clear-homepage -u piecioshka                      # only clears *.github.io
+github-clear-homepage -u piecioshka -v public
+github-clear-homepage -u piecioshka -v private
+github-clear-homepage -u piecioshka -F
+github-clear-homepage -u piecioshka --force              # clears ANY homepage
+github-clear-homepage -f repos.txt
+cat repos.txt | github-clear-homepage
+github-clear-homepage owner/repo another/repo            # positional slugs
+DRY_RUN=1 github-clear-homepage -u piecioshka
 
 # Disable the wiki feature on repos whose wiki is empty (no pages lost)
-DRY_RUN=1 github-disable-wikis -u piecioshka
-github-disable-wikis -u piecioshka                        # only disables EMPTY wikis
-github-disable-wikis -u piecioshka --force                # disable wiki even if it has pages
-github-disable-wikis -f empty-wikis.txt
-cat empty-wikis.txt | github-disable-wikis
-github-disable-wikis owner/repo another/repo              # positional slugs
+DRY_RUN=1 github-disable-wiki -u piecioshka
+github-disable-wiki -u piecioshka                        # only disables EMPTY wikis
+github-disable-wiki -u piecioshka --force                # disable wiki even if it has pages
+github-disable-wiki -f empty-wikis.txt
+cat empty-wikis.txt | github-disable-wiki
+github-disable-wiki owner/repo another/repo              # positional slugs
 
 # Disable the Projects feature on repos with no linked projects
 DRY_RUN=1 github-disable-projects-feature -u piecioshka
@@ -199,8 +199,8 @@ github-disable-projects-feature owner/repo another/repo   # positional slugs
 
 ```bash
 # 1) Find repos whose homepage is broken, then clear those homepages
-github-find-repos-with-homepages -u piecioshka -r -o broken.txt
-github-clear-homepages -f broken.txt --force
+github-find-repos-with-homepage -u piecioshka -r -o broken.txt
+github-clear-homepage -f broken.txt --force
 
 # 2) Find repos matching a query, then scan them for secrets
 github-find-repos-by-metadata -u piecioshka -q legacy -o legacy.txt
@@ -213,10 +213,10 @@ DRY_RUN=1 github-disable-pages -f all-pages.txt
 github-disable-pages -f all-pages.txt
 
 # 4) Find repos with empty wikis, review the list, then disable those wikis
-github-find-repos-with-wikis -u piecioshka -e -o empty-wikis.txt
+github-find-repos-with-wiki -u piecioshka -e -o empty-wikis.txt
 # ...review empty-wikis.txt...
-DRY_RUN=1 github-disable-wikis -f empty-wikis.txt
-github-disable-wikis -f empty-wikis.txt
+DRY_RUN=1 github-disable-wiki -f empty-wikis.txt
+github-disable-wiki -f empty-wikis.txt
 ```
 
 ## Requirements
@@ -226,7 +226,7 @@ github-disable-wikis -f empty-wikis.txt
 - `jq` — only for `github-find-repos-by-metadata`
 - `curl`
 - `gitleaks` (`brew install gitleaks`) — only for `github-scan-secrets`
-- `git` — for `github-scan-secrets` and `github-find-repos-with-wikis` (wiki page counting)
+- `git` — for `github-scan-secrets` and `github-find-repos-with-wiki` (wiki page counting)
 
 ## Contributing
 

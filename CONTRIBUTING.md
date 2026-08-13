@@ -78,10 +78,10 @@ strong reason and a PR discussion:
 
 - `github-disable-pages` only deletes the `gh-pages` branch. It refuses any
   other branch name (even if the Pages source points there)
-- Destructive scripts default to narrow matching (e.g. `github-clear-homepages`
+- Destructive scripts default to narrow matching (e.g. `github-clear-homepage`
   only clears URLs matching `*.github.io`). Broader matching must be opt-in
   via an explicit `--force` flag
-- `github-disable-wikis` only disables the wiki feature when the wiki has no
+- `github-disable-wiki` only disables the wiki feature when the wiki has no
   pages; `github-disable-projects-feature` only when no Projects are linked. Each
   refuses the non-empty case unless `--force` is passed. These "empty-only"
   guards are the load-bearing safety; don't relax them to match-anything by

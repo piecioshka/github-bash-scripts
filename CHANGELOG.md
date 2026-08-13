@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Renamed the four plural script names to singular — `github-find-repos-with-homepage`, `github-find-repos-with-wiki`, `github-clear-homepage` and `github-disable-wiki` — since every repository has exactly one homepage and one wiki; the auto-named `-o` file prefixes followed suit (`homepage-checked-`, `homepage-broken-`, `homepage-`, `wiki-`, `wiki-unused-`).
 - 2026-08-13 — Renamed `github-list-pages` to `github-find-repos-with-pages`, retiring the last `list` verb — every read-only script now lives in the `github-find-repos-*` family.
 - 2026-08-13 — Unified the `-u` placeholder to `<username>` across every usage header, error message and auto-file-name description (previously a mix of `<user>` and `<username>`).
 - 2026-08-13 — Renamed `github-find-user-repos` to `github-find-repos-by-metadata` — the name now says what the script searches through (name, description, homepage, topics, language), not whose repos.

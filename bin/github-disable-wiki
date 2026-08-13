@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-disable-wikis -u <username>                    # all non-fork repos of a user
-#   github-disable-wikis -u <username> -v public          # only public
-#   github-disable-wikis -u <username> -v private         # only private
-#   github-disable-wikis -u <username> -F                 # include forks
-#   github-disable-wikis -f links.txt                     # repos from a file
-#   echo "https://github.com/o/r" | github-disable-wikis  # repos from stdin
-#   github-disable-wikis owner/repo another/repo        # positional slugs
-#   github-disable-wikis -u <username> --force            # disable wiki even if it has pages
-#   DRY_RUN=1 github-disable-wikis -u <username>          # show what would be done
-#   github-disable-wikis --help                           # show help
+#   github-disable-wiki -u <username>                    # all non-fork repos of a user
+#   github-disable-wiki -u <username> -v public          # only public
+#   github-disable-wiki -u <username> -v private         # only private
+#   github-disable-wiki -u <username> -F                 # include forks
+#   github-disable-wiki -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-disable-wiki  # repos from stdin
+#   github-disable-wiki owner/repo another/repo        # positional slugs
+#   github-disable-wiki -u <username> --force            # disable wiki even if it has pages
+#   DRY_RUN=1 github-disable-wiki -u <username>          # show what would be done
+#   github-disable-wiki --help                           # show help
 #
 # For each repo on the list: if the wiki feature is enabled but the wiki has no
 # pages (empty wiki), disables the wiki feature. Repos whose wiki is already off,
@@ -17,8 +17,8 @@
 # feature regardless of content (the pages are NOT deleted; re-enabling the wiki
 # brings them back).
 #
-# Pairs with github-find-repos-with-wikis: `github-find-repos-with-wikis -u me -e -o w.txt`
-# then `github-disable-wikis -f w.txt`.
+# Pairs with github-find-repos-with-wiki: `github-find-repos-with-wiki -u me -e -o w.txt`
+# then `github-disable-wiki -f w.txt`.
 #
 # Accepts repo URLs (one per line, lines starting with # are ignored):
 #   - https://github.com/owner/repo

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-clear-homepages -u <username>                    # all non-fork repos of a user
-#   github-clear-homepages -u <username> -v public          # only public
-#   github-clear-homepages -u <username> -v private         # only private
-#   github-clear-homepages -u <username> -F                 # include forks
-#   github-clear-homepages -f links.txt                     # repos from a file
-#   echo "https://github.com/o/r" | github-clear-homepages  # repos from stdin
-#   github-clear-homepages owner/repo another/repo        # positional slugs
-#   github-clear-homepages -u <username> --force            # clear ANY homepage (not only *.github.io)
-#   DRY_RUN=1 github-clear-homepages -u <username>          # show what would be done
-#   github-clear-homepages --help                           # show help
+#   github-clear-homepage -u <username>                    # all non-fork repos of a user
+#   github-clear-homepage -u <username> -v public          # only public
+#   github-clear-homepage -u <username> -v private         # only private
+#   github-clear-homepage -u <username> -F                 # include forks
+#   github-clear-homepage -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-clear-homepage  # repos from stdin
+#   github-clear-homepage owner/repo another/repo        # positional slugs
+#   github-clear-homepage -u <username> --force            # clear ANY homepage (not only *.github.io)
+#   DRY_RUN=1 github-clear-homepage -u <username>          # show what would be done
+#   github-clear-homepage --help                           # show help
 #
 # For each repo on the list: if the repo's website/homepage URL points to a
 # *.github.io address, clears it. Repos whose homepage is something else
