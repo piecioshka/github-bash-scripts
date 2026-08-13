@@ -152,10 +152,9 @@ github-scan-secrets -f repos.txt
 github-scan-secrets owner/repo another-owner/repo        # positional slugs
 echo "https://github.com/owner/repo" | github-scan-secrets
 
-# Env overrides
+github-scan-secrets -u piecioshka -g 'my_secret|prod_token'   # custom grep regex
+github-scan-secrets -u piecioshka -d /tmp/reports             # custom reports directory
 CONCURRENCY=8 github-scan-secrets -u piecioshka
-GREP_PATTERN="my_secret|prod_token" github-scan-secrets -u piecioshka
-RESULTS_DIR=/tmp/reports github-scan-secrets -u piecioshka
 ```
 
 ### Modify (write operations)
