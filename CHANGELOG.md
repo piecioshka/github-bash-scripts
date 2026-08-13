@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Removed `github-list-homepages`: its behaviour lives on as `github-find-repos-with-homepages -n` / `--no-check`, which lists the repositories with a homepage straight from metadata without the HTTP round-trips.
 - 2026-08-13 — Added positional `owner/repo` arguments to all five mutators (`github-clear-homepages`, `github-enable-pages`, `github-disable-pages`, `github-disable-wikis`, `github-disable-projects-feature`), matching `github-scan-secrets`: every script that consumes a repo list now takes repos positionally, via `-f`, via `-u` (where applicable) or via stdin.
 - 2026-08-13 — Renamed `github-find-repos-with-broken-homepages` to `github-find-repos-with-homepages`: it now lists every repository with a homepage set together with the HTTP status of each URL, and the old behaviour (broken only) moved behind the new `-e` / `--only-broken` flag; `-o` saves the displayed set instead of always the broken one.
 - 2026-08-13 — Unified the CLI cosmetics across all scripts: option parsers now handle flags in the same order as the usage headers, and auto-named `-o` files follow one `<topic>[-<qualifier>][-repos]-<user>_<timestamp>.txt` scheme (`licenses-`, `branches-<branch>-`, `wikis-unused-`, `pages-` instead of `with-license-`, `<mode>-<branch>-branch-`, `wiki-empty-`, `<mode>-links-`).

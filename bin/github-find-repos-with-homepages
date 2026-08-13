@@ -5,6 +5,7 @@
 #   github-find-repos-with-homepages -u <username> -v private   # only private
 #   github-find-repos-with-homepages -u <username> -F           # include forks
 #   github-find-repos-with-homepages -u <username> -e           # only broken homepages (non-2xx/3xx)
+#   github-find-repos-with-homepages -u <username> -n           # just list, skip the HTTP check
 #   github-find-repos-with-homepages -u <username> -r           # output repo URLs (github.com/owner/repo)
 #   github-find-repos-with-homepages -u <username> -o           # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-homepages -u <username> -o out.txt   # also save URLs to a specific file
@@ -13,10 +14,13 @@
 # Lists repositories with a homepage set and checks each URL over HTTP:
 # OK for 2xx/3xx, BROKEN otherwise. Pass -e / --only-broken to keep only the
 # BROKEN rows (with -r that output chains into github-clear-homepages).
+# Pass -n / --no-check for an instant list straight from repo metadata,
+# without touching the homepages over HTTP (-e makes no sense then).
 # Default mode: homepage URLs. With -r / --repo-url: repository URLs.
 # By default prints to stdout only. Pass -o to also save a file — bare -o
 # generates <PWD>/homepages-checked[-repos]-<user>_<timestamp>.txt
-# (homepages-broken[-repos]-<user>_… with --only-broken), -o <path> uses that path.
+# (homepages-broken[-repos]-<user>_… with --only-broken and
+# homepages[-repos]-<user>_… with --no-check), -o <path> uses that path.
 #
 # Env:
 #   CONCURRENCY=10   parallelism for URL checks
@@ -30,6 +34,7 @@ GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
 BROKEN_ONLY=0
+NO_CHECK=0
 OUTPUT_FILE=""
 OUTPUT_MODE="homepage"    # homepage | repo
 CONCURRENCY="${CONCURRENCY:-10}"
@@ -58,6 +63,8 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_MODE="repo"; shift ;;
         -e|--only-broken)
             BROKEN_ONLY=1; shift ;;
+        -n|--no-check)
+            NO_CHECK=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                 OUTPUT_FILE="__AUTO__"; shift 1
@@ -87,10 +94,16 @@ case "$VISIBILITY" in
     *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
 esac
 
+if [[ "$NO_CHECK" == "1" && "$BROKEN_ONLY" == "1" ]]; then
+    echo "ERROR: -n/--no-check cannot be combined with -e/--only-broken" >&2
+    exit 1
+fi
+
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
     PREFIX="homepages-checked"
     [[ "$BROKEN_ONLY" == "1" ]] && PREFIX="homepages-broken"
+    [[ "$NO_CHECK" == "1" ]] && PREFIX="homepages"
     if [[ "$OUTPUT_MODE" == "homepage" ]]; then
         OUTPUT_FILE="$PWD/$PREFIX-$GH_USER""_$TIMESTAMP.txt"
     else
@@ -130,9 +143,13 @@ echo "${C_BOLD}User:${C_RESET}        $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
 echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
 echo "${C_BOLD}Mode:${C_RESET}        $OUTPUT_MODE"
-echo "${C_BOLD}Filter:${C_RESET}      $([[ $BROKEN_ONLY == 1 ]] && echo "broken only" || echo "all rows")"
-echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
-echo "${C_BOLD}Timeout:${C_RESET}     ${TIMEOUT}s"
+if [[ "$NO_CHECK" == "1" ]]; then
+    echo "${C_BOLD}Check:${C_RESET}       skipped (metadata only)"
+else
+    echo "${C_BOLD}Filter:${C_RESET}      $([[ $BROKEN_ONLY == 1 ]] && echo "broken only" || echo "all rows")"
+    echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
+    echo "${C_BOLD}Timeout:${C_RESET}     ${TIMEOUT}s"
+fi
 [[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
 echo
 
@@ -147,8 +164,10 @@ if [[ -z "$entries" ]]; then
 fi
 
 total=$(echo "$entries" | wc -l | tr -d ' ')
-echo "Checking $total homepage URLs..."
-echo
+if [[ "$NO_CHECK" == "0" ]]; then
+    echo "Checking $total homepage URLs..."
+    echo
+fi
 
 # 2. Check each homepage URL in parallel
 check_entry() {
@@ -169,9 +188,14 @@ check_entry() {
 export -f check_entry
 export TIMEOUT
 
-results=$(echo "$entries" \
-    | tr '\t' '\n' \
-    | xargs -n 5 -P "$CONCURRENCY" bash -c 'check_entry "$@"' _)
+if [[ "$NO_CHECK" == "1" ]]; then
+    # No HTTP round-trips — synthesize rows straight from the metadata.
+    results=$(echo "$entries" | awk -F'\t' '{ print "-\t-\t" $0 }')
+else
+    results=$(echo "$entries" \
+        | tr '\t' '\n' \
+        | xargs -n 5 -P "$CONCURRENCY" bash -c 'check_entry "$@"' _)
+fi
 
 # 3. Print sorted (optionally only BROKEN rows)
 display="$results"
@@ -183,7 +207,11 @@ echo "$display" | sort | while IFS=$'\t' read -r status code slug url vis is_for
     [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
     [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
     [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
-    printf "%s  %5s  %-50s  %s%s\n" "$(paint_status "$status")" "$code" "$slug" "$url" "$badges"
+    if [[ "$status" == "-" ]]; then
+        printf "${C_GREEN}✓${C_RESET} %-50s  %s%s\n" "$slug" "$url" "$badges"
+    else
+        printf "%s  %5s  %-50s  %s%s\n" "$(paint_status "$status")" "$code" "$slug" "$url" "$badges"
+    fi
 done
 
 # 4. Build URL list from the displayed rows (slug = col 3, homepage = col 4)
@@ -193,11 +221,14 @@ else
     urls=$(echo "$display" | awk -F'\t' 'NF>=4 { print $4 }' | sort -u)
 fi
 
-ok=$(echo "$results" | grep -c '^OK' || true)
-fail=$(echo "$results" | grep -c '^BROKEN' || true)
-
 echo
-echo "${C_BOLD}Summary:${C_RESET} OK=$ok  BROKEN=$fail  TOTAL=$total"
+if [[ "$NO_CHECK" == "1" ]]; then
+    echo "${C_BOLD}Summary:${C_RESET} $total repos with a homepage set"
+else
+    ok=$(echo "$results" | grep -c '^OK' || true)
+    fail=$(echo "$results" | grep -c '^BROKEN' || true)
+    echo "${C_BOLD}Summary:${C_RESET} OK=$ok  BROKEN=$fail  TOTAL=$total"
+fi
 
 if [[ -n "$OUTPUT_FILE" ]]; then
     echo "$urls" > "$OUTPUT_FILE"

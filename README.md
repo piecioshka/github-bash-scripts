@@ -60,21 +60,13 @@ github-list-pages -u piecioshka -o                       # also save to auto-nam
 github-list-pages -u piecioshka -o my-pages.txt          # also save to a specific file
 CONCURRENCY=20 github-list-pages -u piecioshka
 
-# List repos that have a non-empty website/homepage set
-github-list-homepages -u piecioshka
-github-list-homepages -u piecioshka -v public
-github-list-homepages -u piecioshka -v private
-github-list-homepages -u piecioshka -F
-github-list-homepages -u piecioshka -r                    # output repo URLs
-github-list-homepages -u piecioshka -o                    # also save to auto-named file in $PWD
-github-list-homepages -u piecioshka -o my-homepages.txt   # also save to a specific file
-
 # List repos with a homepage set and check each URL over HTTP (OK / BROKEN)
 github-find-repos-with-homepages -u piecioshka
 github-find-repos-with-homepages -u piecioshka -v public
 github-find-repos-with-homepages -u piecioshka -F
 github-find-repos-with-homepages -u piecioshka -e             # only broken homepages (non-2xx/3xx)
 github-find-repos-with-homepages -u piecioshka -e -r          # repo URLs of broken ones (chainable)
+github-find-repos-with-homepages -u piecioshka -n             # just list, skip the HTTP check
 github-find-repos-with-homepages -u piecioshka -o             # also save to auto-named file in $PWD
 github-find-repos-with-homepages -u piecioshka -o broken.txt  # also save to a specific file
 CONCURRENCY=20 TIMEOUT=30 github-find-repos-with-homepages -u piecioshka
