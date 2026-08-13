@@ -68,12 +68,12 @@ github-list-homepages -u piecioshka -r                    # output repo URLs
 github-list-homepages -u piecioshka -o                    # also save to auto-named file in $PWD
 github-list-homepages -u piecioshka -o my-homepages.txt   # also save to a specific file
 
-# List repos whose homepage URL is broken (non-2xx/3xx)
+# List repos whose homepage URL is broken (non-2xx/3xx); prints only broken rows
 github-find-repos-with-broken-homepages -u piecioshka
 github-find-repos-with-broken-homepages -u piecioshka -v public
 github-find-repos-with-broken-homepages -u piecioshka -F
 github-find-repos-with-broken-homepages -u piecioshka -r             # output repo URLs (chainable)
-github-find-repos-with-broken-homepages -u piecioshka -b             # print only broken links
+github-find-repos-with-broken-homepages -u piecioshka -a             # show all rows, including OK homepages
 github-find-repos-with-broken-homepages -u piecioshka -o             # also save to auto-named file in $PWD
 github-find-repos-with-broken-homepages -u piecioshka -o broken.txt  # also save to a specific file
 CONCURRENCY=20 TIMEOUT=30 github-find-repos-with-broken-homepages -u piecioshka

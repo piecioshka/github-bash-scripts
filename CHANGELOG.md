@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Changed `github-find-repos-with-broken-homepages` to print only the `BROKEN` rows by default; the new `-a` / `--all` flag restores the full listing (replaces `-b` / `--broken-only`).
 - 2026-08-13 — Renamed all sixteen scripts to verb-first names so each name reads as the question it answers — `github-find-*` for filtering (e.g. `github-find-repos-without-description`, `github-find-repos-with-broken-homepages`), `github-list-*` for reports, and action verbs for the rest (`github-enable-pages`, `github-disable-wikis`, `github-clear-homepages`, `github-scan-secrets`, `github-find-user-repos`).
 - 2026-07-16 — Added `-b` / `--broken-only` to `github-homepage-list-broken`: prints only the repositories whose homepage is broken, skipping the `OK` rows. ([`dd1fb79`])
 - 2026-06-10 — Added `github-projects-disable`: turns off the Projects tab in a user's repositories, with `DRY_RUN=1` support. ([`8804155`])

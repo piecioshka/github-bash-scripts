@@ -5,14 +5,15 @@
 #   github-find-repos-with-broken-homepages -u <username> -v private   # only private
 #   github-find-repos-with-broken-homepages -u <username> -F           # include forks
 #   github-find-repos-with-broken-homepages -u <username> -r           # output repo URLs (github.com/owner/repo)
-#   github-find-repos-with-broken-homepages -u <username> -b           # print only broken links (skip OK rows)
+#   github-find-repos-with-broken-homepages -u <username> -a           # show all rows, including OK homepages
 #   github-find-repos-with-broken-homepages -u <username> -o           # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-broken-homepages -u <username> -o out.txt   # also save URLs to a specific file
 #   github-find-repos-with-broken-homepages --help                     # show help
 #
 # Lists repositories whose homepage URL is broken (HTTP status outside 2xx/3xx).
-# Default mode: broken homepage URLs. With -r / --repo-url: repository URLs
-# instead (chainable with github-clear-homepages).
+# By default only BROKEN rows are printed; pass -a / --all to also show the OK
+# ones. Default mode: broken homepage URLs. With -r / --repo-url: repository
+# URLs instead (chainable with github-clear-homepages).
 # By default prints to stdout only. Pass -o to also save a file — bare -o
 # generates <PWD>/broken-homepages-<user>_<timestamp>.txt, -o <path> uses that path.
 #
@@ -27,7 +28,7 @@ set -u
 GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
-BROKEN_ONLY=0
+BROKEN_ONLY=1
 OUTPUT_FILE=""
 OUTPUT_MODE="homepage"    # homepage | repo
 CONCURRENCY="${CONCURRENCY:-10}"
@@ -54,8 +55,8 @@ while [[ $# -gt 0 ]]; do
             INCLUDE_FORKS=1; shift ;;
         -r|--repo-url)
             OUTPUT_MODE="repo"; shift ;;
-        -b|--broken-only)
-            BROKEN_ONLY=1; shift ;;
+        -a|--all)
+            BROKEN_ONLY=0; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                 OUTPUT_FILE="__AUTO__"; shift 1
@@ -126,7 +127,7 @@ echo "${C_BOLD}User:${C_RESET}        $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
 echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
 echo "${C_BOLD}Mode:${C_RESET}        $OUTPUT_MODE"
-[[ "$BROKEN_ONLY" == "1" ]] && echo "${C_BOLD}Filter:${C_RESET}      broken only"
+echo "${C_BOLD}Filter:${C_RESET}      $([[ $BROKEN_ONLY == 1 ]] && echo "broken only" || echo "all rows")"
 echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
 echo "${C_BOLD}Timeout:${C_RESET}     ${TIMEOUT}s"
 [[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
