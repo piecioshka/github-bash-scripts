@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Aligned CI with the documented bar: shellcheck runs at the default severity (the `severity: warning` override is gone) and a new `usage-smoke` job runs the `--help` smoke test that CONTRIBUTING already treated as a blocker.
+- 2026-08-13 — Listed `--dry-run` (and `-b`/`-p` in `github-enable-pages`) in the unknown-flag hint messages of the write scripts.
+- 2026-08-13 — Changed `github-disable-projects-feature` to report an unreadable linked-project count as `FAIL` (exit 1) instead of `SKIP`, matching how `github-disable-wiki` treats an inconclusive wiki check.
+- 2026-08-13 — Fixed the pages/branch/license/readme finders silently undercounting on API errors: HTTP 404 (and 409 for empty-repo trees) stays a legitimate negative, while any other failure (rate limit, network, auth) now prints a `WARN` on stderr, matching the wiki and projects finders.
+- 2026-08-13 — Fixed the broken-homepage chained example in README: it was missing `-e`, so the saved file would list every repo with a homepage and the follow-up `github-clear-homepage --force` would clear all of them.
+- 2026-08-13 — Fixed write scripts exiting `0` on input errors: `input_source` is consumed via a process substitution, so its `exit 1` (missing `-f` file, no input source) died in a subshell; the new `validate_input_source` runs the same checks in the main shell before the loop.
 - 2026-08-13 — Rewrote README and CONTRIBUTING to match the current behaviour precisely: repository layout (`bin/` + `shared/`), input priority, the short-flag registry, `DRY_RUN`/`--dry-run` semantics, exit codes, and the honest bash requirement (4.4+; the macOS system bash 3.2 does not run these scripts).
 - 2026-08-13 — Ignored `scan-results/` and the auto-named `-o` output files (`*_YYYY-MM-DD_HH-mm-ss.txt`) in `.gitignore`, so secret-scan reports and chained-workflow artifacts cannot be committed by accident.
 - 2026-08-13 — Pinned the `action-shellcheck` CI action to the 2.0.0 release SHA (previously tracked `@master`) and extended linting to `shared/` with `SHELLCHECK_OPTS=-x`.
