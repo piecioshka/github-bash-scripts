@@ -136,7 +136,7 @@ if [[ -z "$repos" ]]; then
 fi
 
 total=$(echo "$repos" | wc -l | tr -d ' ')
-echo "Checking $total repos with wikis enabled..."
+echo "Checking $total candidate repos (wiki flag on)..."
 echo
 
 # Emits "<slug>\t<pages>\t<vis>\t<fork>\t<archived>" for every repo whose wiki
@@ -157,7 +157,7 @@ inspect_wiki() {
         printf "WARN  %s — wiki check inconclusive: cannot read repo via REST\n" "$slug" >&2
         return 0
     fi
-    [[ "$has_wiki" == "true" ]] || return 0
+    [[ "$has_wiki" == "true" ]] || { printf "SKIP\t%s\n" "$slug"; return 0; }
     # shellcheck disable=SC2016  # $1/$GH_WIKI_TOKEN must stay literal — git expands them when it runs the helper
     out=$(git -c credential.helper='' \
         -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
@@ -194,8 +194,13 @@ export -f inspect_wiki
 
 # Note: TSV fields are passed as separate positional args — BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
-results=$(echo "$repos" | tr '\t' ' ' \
+raw_results=$(echo "$repos" | tr '\t' ' ' \
     | xargs -n 4 -P "$CONCURRENCY" bash -c 'inspect_wiki "$@"' _)
+
+# Candidates whose wiki flag is on but the feature is not actually available
+# (REST has_wiki=false) come back as SKIP rows — count and drop them.
+skipped=$(echo "$raw_results" | awk -F'\t' '$1=="SKIP"' | grep -c . || true)
+results=$(echo "$raw_results" | awk -F'\t' '$1!="SKIP"')
 
 display="$results"
 [[ "$ONLY_EMPTY" == "1" ]] && display=$(echo "$results" | awk -F'\t' '$2==0')
@@ -228,6 +233,9 @@ if [[ "$ONLY_EMPTY" == "1" ]]; then
     echo "${C_BOLD}${C_DIM}Found $found/$total repos with an empty wiki.${C_RESET}"
 else
     echo "${C_BOLD}${C_DIM}Found $found/$total repos with the wiki feature enabled ($empty_count empty).${C_RESET}"
+fi
+if [[ "$skipped" -gt 0 ]]; then
+    echo "${C_DIM}Skipped $skipped candidate(s): wiki flag on, but the feature is not actually available (not shown in repo settings).${C_RESET}"
 fi
 
 if [[ -n "$OUTPUT_FILE" ]]; then

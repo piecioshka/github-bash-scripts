@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Clarified the progress and summary messages of `github-find-repos-with-wikis`: the header counts "candidate repos (wiki flag on)" and the summary reports how many candidates were skipped because the wiki feature is not actually available.
 - 2026-08-13 — Renamed `github-find-repos-with-empty-wikis` to `github-find-repos-with-wikis`: it now lists every repository with the wiki feature enabled together with its wiki page count, and the old behaviour (empty wikis only) moved behind the new `-e` / `--only-empty` flag.
 - 2026-08-13 — Changed `github-find-repos-with-license` to leave a wider gap between the repository name and the license info (repo column grew from 45 to 60 characters).
 - 2026-08-13 — Changed `github-find-repos-with-license` to print the license badge without the `📄` emoji.
