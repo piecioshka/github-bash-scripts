@@ -154,7 +154,7 @@ if [[ -n "$results" ]]; then
         [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
         [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
         [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
-        printf "${C_GREEN}✓${C_RESET} %-45s ${C_DIM}→${C_RESET} %s%s%s\n" "$slug" "$license_file" "$lic_badge" "$badges"
+        printf "${C_GREEN}✓${C_RESET} %-60s ${C_DIM}→${C_RESET} %s%s%s\n" "$slug" "$license_file" "$lic_badge" "$badges"
     done <<< "$(echo "$results" | sort)"
 fi
 
