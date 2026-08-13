@@ -114,13 +114,14 @@ github-find-user-repos -u piecioshka -q '^workshop-.*2019' -E   # regex
 github-find-user-repos -u piecioshka -q react -o               # also save repo URLs to auto-named file
 github-find-user-repos -u piecioshka -q react -o matches.txt   # also save repo URLs to a specific file
 
-# List repos whose wiki feature is enabled but has no pages (empty wiki)
-github-find-repos-with-empty-wikis -u piecioshka
-github-find-repos-with-empty-wikis -u piecioshka -v public
-github-find-repos-with-empty-wikis -u piecioshka -F
-github-find-repos-with-empty-wikis -u piecioshka -o                  # also save repo URLs to auto-named file
-github-find-repos-with-empty-wikis -u piecioshka -o empty-wikis.txt  # also save repo URLs to a specific file
-CONCURRENCY=20 github-find-repos-with-empty-wikis -u piecioshka
+# List repos with the wiki feature enabled, together with their wiki page counts
+github-find-repos-with-wikis -u piecioshka
+github-find-repos-with-wikis -u piecioshka -v public
+github-find-repos-with-wikis -u piecioshka -F
+github-find-repos-with-wikis -u piecioshka -e                  # only wikis with no pages (empty)
+github-find-repos-with-wikis -u piecioshka -o                  # also save repo URLs to auto-named file
+github-find-repos-with-wikis -u piecioshka -o wikis.txt        # also save repo URLs to a specific file
+CONCURRENCY=20 github-find-repos-with-wikis -u piecioshka
 
 # List repos whose Projects feature is enabled but have no linked projects (empty)
 github-find-repos-with-unused-projects-feature -u piecioshka
@@ -213,7 +214,7 @@ DRY_RUN=1 github-disable-pages -f all-pages.txt
 github-disable-pages -f all-pages.txt
 
 # 4) Find repos with empty wikis, review the list, then disable those wikis
-github-find-repos-with-empty-wikis -u piecioshka -o empty-wikis.txt
+github-find-repos-with-wikis -u piecioshka -e -o empty-wikis.txt
 # ...review empty-wikis.txt...
 DRY_RUN=1 github-disable-wikis -f empty-wikis.txt
 github-disable-wikis -f empty-wikis.txt
@@ -226,7 +227,7 @@ github-disable-wikis -f empty-wikis.txt
 - `jq` — only for `github-find-user-repos`
 - `curl`
 - `gitleaks` (`brew install gitleaks`) — only for `github-scan-secrets`
-- `git` — for `github-scan-secrets` and `github-find-repos-with-empty-wikis` (empty-wiki detection)
+- `git` — for `github-scan-secrets` and `github-find-repos-with-wikis` (wiki page counting)
 
 ## Contributing
 

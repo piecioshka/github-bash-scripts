@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Renamed `github-find-repos-with-empty-wikis` to `github-find-repos-with-wikis`: it now lists every repository with the wiki feature enabled together with its wiki page count, and the old behaviour (empty wikis only) moved behind the new `-e` / `--only-empty` flag.
 - 2026-08-13 — Changed `github-find-repos-with-license` to leave a wider gap between the repository name and the license info (repo column grew from 45 to 60 characters).
 - 2026-08-13 — Changed `github-find-repos-with-license` to print the license badge without the `📄` emoji.
 - 2026-08-13 — Fixed `github-find-repos-with-empty-wikis` reporting repositories whose wiki feature is off: the GraphQL `hasWikiEnabled` flag used for pre-filtering can disagree with the repo settings, so each candidate is now re-checked against the REST `has_wiki` field before its wiki content is inspected.

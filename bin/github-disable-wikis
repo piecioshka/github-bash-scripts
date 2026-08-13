@@ -16,7 +16,7 @@
 # feature regardless of content (the pages are NOT deleted; re-enabling the wiki
 # brings them back).
 #
-# Pairs with github-find-repos-with-empty-wikis: `github-find-repos-with-empty-wikis -u me -o w.txt`
+# Pairs with github-find-repos-with-wikis: `github-find-repos-with-wikis -u me -e -o w.txt`
 # then `github-disable-wikis -f w.txt`.
 #
 # Accepts repo URLs (one per line, lines starting with # are ignored):

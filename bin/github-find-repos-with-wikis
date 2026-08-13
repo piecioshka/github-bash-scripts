@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-find-repos-with-empty-wikis -u <username>                   # all repos (forks excluded)
-#   github-find-repos-with-empty-wikis -u <username> -v public         # only public
-#   github-find-repos-with-empty-wikis -u <username> -v private        # only private
-#   github-find-repos-with-empty-wikis -u <username> -F                # include forks
-#   github-find-repos-with-empty-wikis -u <username> -o                # also save URLs to auto-named file in $PWD
-#   github-find-repos-with-empty-wikis -u <username> -o out.txt        # also save URLs to a specific file
-#   github-find-repos-with-empty-wikis --help                          # show help
+#   github-find-repos-with-wikis -u <username>                   # all repos (forks excluded)
+#   github-find-repos-with-wikis -u <username> -v public         # only public
+#   github-find-repos-with-wikis -u <username> -v private        # only private
+#   github-find-repos-with-wikis -u <username> -F                # include forks
+#   github-find-repos-with-wikis -u <username> -e                # only wikis with no pages (empty)
+#   github-find-repos-with-wikis -u <username> -o                # also save URLs to auto-named file in $PWD
+#   github-find-repos-with-wikis -u <username> -o out.txt        # also save URLs to a specific file
+#   github-find-repos-with-wikis --help                          # show help
 #
-# Lists repositories whose wiki feature is ENABLED but has no pages (empty wiki).
+# Lists repositories whose wiki feature is ENABLED, with the number of wiki
+# pages each one has. Pass -e / --only-empty to keep only the wikis without a
+# single page (chain that output into github-disable-wikis -f <file>).
 # A wiki lives in a separate git repo at <repo>.wiki.git; an empty wiki has no
-# such repo, so `git ls-remote` returns no refs. Only repos with the wiki
-# feature on are checked (others have nothing to clean up).
+# such repo, so `git ls-remote` returns no refs. Page counts come from a
+# blobless, no-checkout clone of the wiki repo (trees only, no file contents).
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/wiki-empty-<user>_<timestamp>.txt, -o <path> uses
-# that path. Chain the output into github-disable-wikis -f <file>.
+# bare -o generates <PWD>/wikis-<user>_<timestamp>.txt (wiki-empty-<user>_… with
+# --only-empty), -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated), git
 
@@ -23,6 +26,7 @@ set -u
 GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
+ONLY_EMPTY=0
 OUTPUT_FILE=""
 CONCURRENCY="${CONCURRENCY:-10}"
 
@@ -45,6 +49,8 @@ while [[ $# -gt 0 ]]; do
             VISIBILITY="$2"; shift 2 ;;
         -F|--include-forks)
             INCLUDE_FORKS=1; shift ;;
+        -e|--only-empty)
+            ONLY_EMPTY=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                 OUTPUT_FILE="__AUTO__"; shift 1
@@ -88,7 +94,11 @@ export GH_WIKI_TOKEN
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    OUTPUT_FILE="$PWD/wiki-empty-$GH_USER""_$TIMESTAMP.txt"
+    if [[ "$ONLY_EMPTY" == "1" ]]; then
+        OUTPUT_FILE="$PWD/wiki-empty-$GH_USER""_$TIMESTAMP.txt"
+    else
+        OUTPUT_FILE="$PWD/wikis-$GH_USER""_$TIMESTAMP.txt"
+    fi
 fi
 
 # colors (tty only)
@@ -111,6 +121,7 @@ jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFor
 echo "${C_BOLD}User:${C_RESET}        $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
 echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+echo "${C_BOLD}Filter:${C_RESET}      $([[ $ONLY_EMPTY == 1 ]] && echo "empty wikis only" || echo "all wikis")"
 echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
 [[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
 echo
@@ -125,17 +136,19 @@ if [[ -z "$repos" ]]; then
 fi
 
 total=$(echo "$repos" | wc -l | tr -d ' ')
-echo "Checking $total repos with wikis enabled for empty wikis..."
+echo "Checking $total repos with wikis enabled..."
 echo
 
-# Emits the repo row only when the wiki is empty. A wiki lives in a separate
-# <repo>.wiki.git; an empty wiki has no such repo, so GitHub reports
-# "Repository not found". A reachable wiki advertising refs HAS pages (skip).
-# Any other failure (network, auth, rate limit) is inconclusive — warn on stderr
-# and skip, rather than misreport it as empty. Auth via the GH_WIKI_TOKEN helper.
-wiki_is_empty() {
+# Emits "<slug>\t<pages>\t<vis>\t<fork>\t<archived>" for every repo whose wiki
+# feature is really on. A wiki lives in a separate <repo>.wiki.git; an empty
+# wiki has no such repo, so GitHub reports "Repository not found" (0 pages).
+# A reachable wiki gets a blobless, no-checkout clone and its pages are counted
+# as files with a wiki markup extension. Any other failure (network, auth, rate
+# limit) is inconclusive — warn on stderr and skip, rather than misreport.
+# Auth via the GH_WIKI_TOKEN helper.
+inspect_wiki() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
-    local out rc has_wiki
+    local out rc has_wiki pages tmp
     # The GraphQL hasWikiEnabled flag used for the pre-filter can disagree with
     # the repo settings (it reports the stored flag even when the wiki feature
     # is not actually available, e.g. private repos on a free plan). Trust the
@@ -150,39 +163,72 @@ wiki_is_empty() {
         -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
         ls-remote "https://github.com/$slug.wiki.git" 2>&1)
     rc=$?
-    if [[ $rc -eq 0 ]]; then
-        # Reachable wiki repo: empty only if it advertises no refs.
-        [[ -z "$out" ]] && printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
-    elif grep -qi 'not found' <<< "$out"; then
-        printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
+    if [[ $rc -ne 0 ]]; then
+        if grep -qi 'not found' <<< "$out"; then
+            pages=0
+        else
+            printf "WARN  %s — wiki check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$out")" >&2
+            return 0
+        fi
+    elif [[ -z "$out" ]]; then
+        pages=0
     else
-        printf "WARN  %s — wiki check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$out")" >&2
+        tmp=$(mktemp -d) || { printf "WARN  %s — cannot create temp dir\n" "$slug" >&2; return 0; }
+        # shellcheck disable=SC2016  # same literal-expansion rule as above
+        if git -c credential.helper='' \
+            -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
+            clone --quiet --depth 1 --filter=blob:none --no-checkout \
+            "https://github.com/$slug.wiki.git" "$tmp/wiki" 2>/dev/null; then
+            pages=$(git -C "$tmp/wiki" ls-tree -r --name-only HEAD 2>/dev/null \
+                | grep -ciE '\.(md|markdown|mdown|mkdn|textile|rdoc|org|creole|rst|asciidoc|adoc|wiki|mediawiki|pod)$' || true)
+        else
+            rm -rf "$tmp"
+            printf "WARN  %s — wiki check inconclusive: clone failed\n" "$slug" >&2
+            return 0
+        fi
+        rm -rf "$tmp"
     fi
+    printf "%s\t%s\t%s\t%s\t%s\n" "$slug" "$pages" "$vis" "$is_fork" "$is_archived"
 }
-export -f wiki_is_empty
+export -f inspect_wiki
 
 # Note: TSV fields are passed as separate positional args — BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
 results=$(echo "$repos" | tr '\t' ' ' \
-    | xargs -n 4 -P "$CONCURRENCY" bash -c 'wiki_is_empty "$@"' _)
+    | xargs -n 4 -P "$CONCURRENCY" bash -c 'inspect_wiki "$@"' _)
 
-if [[ -n "$results" ]]; then
-    while IFS=$'\t' read -r slug vis is_fork is_archived; do
+display="$results"
+[[ "$ONLY_EMPTY" == "1" ]] && display=$(echo "$results" | awk -F'\t' '$2==0')
+
+if [[ -n "$display" ]]; then
+    while IFS=$'\t' read -r slug pages vis is_fork is_archived; do
         [[ -z "$slug" ]] && continue
+        if [[ "$pages" == "0" ]]; then
+            pages_label="${C_YELLOW}0 pages${C_RESET}"
+        elif [[ "$pages" == "1" ]]; then
+            pages_label="${C_DIM}1 page${C_RESET}"
+        else
+            pages_label="${C_DIM}$pages pages${C_RESET}"
+        fi
         badges=""
         [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
         [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
         [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
-        printf "${C_GREEN}✓${C_RESET} %s%s\n" "$slug" "$badges"
-    done <<< "$(echo "$results" | sort)"
+        printf "${C_GREEN}✓${C_RESET} %-50s %s%s\n" "$slug" "$pages_label" "$badges"
+    done <<< "$(echo "$display" | sort)"
 fi
 
-urls=$(echo "$results" | cut -f1 | grep -v '^$' | sort -u \
+urls=$(echo "$display" | cut -f1 | grep -v '^$' | sort -u \
     | awk '{print "https://github.com/" $0}')
 
 found=$(echo "$urls" | grep -c . || true)
+empty_count=$(echo "$results" | awk -F'\t' '$2==0' | grep -c . || true)
 echo
-echo "${C_BOLD}${C_DIM}Found $found/$total repos with an empty wiki.${C_RESET}"
+if [[ "$ONLY_EMPTY" == "1" ]]; then
+    echo "${C_BOLD}${C_DIM}Found $found/$total repos with an empty wiki.${C_RESET}"
+else
+    echo "${C_BOLD}${C_DIM}Found $found/$total repos with the wiki feature enabled ($empty_count empty).${C_RESET}"
+fi
 
 if [[ -n "$OUTPUT_FILE" ]]; then
     echo "$urls" > "$OUTPUT_FILE"
