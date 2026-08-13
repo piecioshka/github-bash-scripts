@@ -86,15 +86,15 @@ github-find-repos-with-only-readme -u piecioshka -o                # also save r
 github-find-repos-with-only-readme -u piecioshka -o readme.txt     # also save repo URLs to a specific file
 CONCURRENCY=20 github-find-repos-with-only-readme -u piecioshka
 
-# List repos that have a given branch (default: gh-pages)
-github-find-repos-with-branch -u piecioshka
+# List repos that have a given branch (-b is required)
+github-find-repos-with-branch -u piecioshka -b gh-pages
 github-find-repos-with-branch -u piecioshka -b main
 github-find-repos-with-branch -u piecioshka -b develop -v public
-github-find-repos-with-branch -u piecioshka -F
-github-find-repos-with-branch -u piecioshka -r                # output repo URLs instead of branch URLs
-github-find-repos-with-branch -u piecioshka -o                # also save to auto-named file in $PWD
-github-find-repos-with-branch -u piecioshka -o branches.txt   # also save to a specific file
-CONCURRENCY=20 github-find-repos-with-branch -u piecioshka
+github-find-repos-with-branch -u piecioshka -b main -F
+github-find-repos-with-branch -u piecioshka -b main -r                # output repo URLs instead of branch URLs
+github-find-repos-with-branch -u piecioshka -b main -o                # also save to auto-named file in $PWD
+github-find-repos-with-branch -u piecioshka -b main -o branches.txt   # also save to a specific file
+CONCURRENCY=20 github-find-repos-with-branch -u piecioshka -b main
 
 # List repos that contain a LICENSE file (LICENSE/LICENCE/COPYING/UNLICENSE)
 github-find-repos-with-license -u piecioshka

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-find-repos-with-branch -u <username>                     # default branch: gh-pages (forks excluded)
-#   github-find-repos-with-branch -u <username> -b <branch>         # custom branch name
-#   github-find-repos-with-branch -u <username> -b main             # e.g. repos that still have 'main'
+#   github-find-repos-with-branch -u <username> -b <branch>         # branch name is required
+#   github-find-repos-with-branch -u <username> -b master           # e.g. repos that still have 'master'
+#   github-find-repos-with-branch -u <username> -b gh-pages         # e.g. leftover Pages branches
 #   github-find-repos-with-branch -u <username> -v public           # only public
 #   github-find-repos-with-branch -u <username> -v private          # only private
 #   github-find-repos-with-branch -u <username> -F                  # include forks
@@ -11,7 +11,7 @@
 #   github-find-repos-with-branch -u <username> -o branches.txt     # also save URLs to a specific file
 #   github-find-repos-with-branch --help                            # show help
 #
-# Lists repositories that have the given branch (default: gh-pages).
+# Lists repositories that have the given branch (-b is required).
 # Default output: branch URLs (github.com/owner/repo/tree/<branch>).
 # With -r / --repo-url: repository URLs.
 # By default prints to stdout only. Pass -o to also save a file — bare -o
@@ -23,7 +23,7 @@
 set -u
 
 GH_USER=""
-BRANCH="gh-pages"
+BRANCH=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
 OUTPUT_FILE=""
@@ -74,7 +74,8 @@ if [[ -z "$GH_USER" ]]; then
 fi
 
 if [[ -z "$BRANCH" ]]; then
-    echo "ERROR: branch name cannot be empty" >&2
+    echo "ERROR: -b <branch> is required" >&2
+    show_usage
     exit 1
 fi
 
