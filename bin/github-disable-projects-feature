@@ -6,14 +6,14 @@
 #   github-disable-projects-feature -u <username> -F                 # include forks
 #   github-disable-projects-feature -f links.txt                     # repos from a file
 #   echo "https://github.com/o/r" | github-disable-projects-feature  # repos from stdin
-#   github-disable-projects-feature owner/repo another/repo        # positional slugs
+#   github-disable-projects-feature owner/repo another/repo          # positional slugs
 #   github-disable-projects-feature -u <username> --force            # disable even if projects exist
 #   DRY_RUN=1 github-disable-projects-feature -u <username>          # show what would be done
 #   github-disable-projects-feature --help                           # show help
 #
 # For each repo on the list: if the Projects feature is enabled but no Projects
 # are linked to the repo (empty), disables the Projects feature. Repos whose
-# Projects feature is already off, or that have linked Projects, are skipped —
+# Projects feature is already off, or that have linked Projects, are skipped -
 # unless --force, which disables the feature regardless (the project boards
 # themselves are not deleted; they just stop showing on the repo's Projects tab).
 # Linked-project count comes from GraphQL `projectsV2`; classic boards are not
@@ -29,17 +29,12 @@
 
 set -u
 
-DRY_RUN="${DRY_RUN:-0}"
-INPUT_FILE=""
-POSITIONAL=()
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
-FORCE=0
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
 
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
+DRY_RUN="${DRY_RUN:-0}"
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -70,63 +65,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'
-    C_RED=$'\033[31m'; C_DIM=$'\033[90m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""
-fi
-
-paint_status() {
-    local status="$1"
-    local padded
-    printf -v padded "%-6s" "$status"
-    case "$status" in
-        OK)   printf "%s%s%s" "$C_GREEN"  "$padded" "$C_RESET" ;;
-        DRY)  printf "%s%s%s" "$C_YELLOW" "$padded" "$C_RESET" ;;
-        KEEP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
-        FAIL) printf "%s%s%s" "$C_RED"    "$padded" "$C_RESET" ;;
-        SKIP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
-        *)    printf "%s" "$padded" ;;
-    esac
-}
-
-print_row() {
-    local status="$1"
-    local repo="$2"
-    local details="${3:-}"
-    printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
-}
-
-url_to_slug() {
-    local url="$1"
-    url="${url#"${url%%[![:space:]]*}"}"
-    url="${url%"${url##*[![:space:]]}"}"
-    if [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
-        local repo="${BASH_REMATCH[2]%.git}"
-        echo "${BASH_REMATCH[1]}/$repo"
-        return
-    fi
-    echo ""
-}
+require_cmd gh "brew install gh"
+validate_visibility "$VISIBILITY"
 
 # Echoes the number of Projects v2 linked to the repo (or "" on error).
 projects_count() {
     local slug="$1"
     local owner="${slug%%/*}" name="${slug#*/}"
-    # shellcheck disable=SC2016  # $owner/$name are GraphQL variables — must stay literal, gh binds them via -f
+    # shellcheck disable=SC2016  # $owner/$name are GraphQL variables - must stay literal, gh binds them via -f
     gh api graphql \
         -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){projectsV2(first:1){totalCount}}}' \
         -f owner="$owner" -f name="$name" \
@@ -162,14 +108,14 @@ disable_projects() {
             return
         fi
         if [[ "$count" != "0" ]]; then
-            print_row "KEEP" "$slug" "has $count linked project(s) — not empty (use --force)"
+            print_row "KEEP" "$slug" "has $count linked project(s) - not empty (use --force)"
             return
         fi
     fi
 
     if [[ "$DRY_RUN" == "1" ]]; then
         local note="would disable Projects feature"
-        [[ "$FORCE" == "1" ]] && note="$note [forced — may have projects]"
+        [[ "$FORCE" == "1" ]] && note="$note [forced - may have projects]"
         print_row "DRY" "$slug" "$note"
         return
     fi
@@ -182,60 +128,10 @@ disable_projects() {
     fi
 }
 
-input_source() {
-    if [[ ${#POSITIONAL[@]} -gt 0 ]]; then
-        echo "${C_BOLD}Source:${C_RESET} positional arguments" >&2
-        local arg
-        for arg in "${POSITIONAL[@]}"; do
-            if [[ "$arg" == http*://* ]]; then
-                echo "$arg"
-            else
-                echo "https://github.com/${arg%.git}"
-            fi
-        done
-        return
-    fi
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
+[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode - will disable Projects even if projects exist ==${C_RESET}"
 
-    if [[ -n "$INPUT_FILE" ]]; then
-        if [[ ! -f "$INPUT_FILE" ]]; then
-            echo "ERROR: file does not exist: $INPUT_FILE" >&2
-            exit 1
-        fi
-        echo "${C_BOLD}Source:${C_RESET} file $INPUT_FILE" >&2
-        cat "$INPUT_FILE"
-        return
-    fi
-
-    if [[ -n "$GH_USER" ]]; then
-        local vis_args=()
-        [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
-        local jq_filter='.[] | select(.hasProjectsEnabled==true)'
-        [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
-        jq_filter="$jq_filter | .nameWithOwner"
-
-        local fork_note="(forks excluded)"
-        [[ "$INCLUDE_FORKS" == "1" ]] && fork_note="(forks included)"
-        echo "${C_BOLD}Source:${C_RESET} gh repo list $GH_USER --visibility $VISIBILITY $fork_note (projects enabled)" >&2
-        gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-            --json nameWithOwner,hasProjectsEnabled,isFork --jq "$jq_filter" \
-            | sed 's#^#https://github.com/#'
-        return
-    fi
-
-    if [[ ! -t 0 ]]; then
-        echo "${C_BOLD}Source:${C_RESET} stdin" >&2
-        cat
-        return
-    fi
-
-    show_usage
-    exit 1
-}
-
-[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
-[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode — will disable Projects even if projects exist ==${C_RESET}"
-
-input_source \
+input_source "hasProjectsEnabled" ".hasProjectsEnabled==true" "(projects enabled)" \
     | grep -vE '^[[:space:]]*(#|$)' \
     | grep -Eo 'https?://[^ ]+' \
     | while read -r url; do

@@ -15,7 +15,7 @@
 # github-disable-projects-feature -f <file>).
 # Linked-project count is read from the GraphQL `projectsV2` field
 # (Projects v2); legacy classic project boards are not counted.
-# By default prints repo slugs to stdout. Pass -o to also save repo URLs —
+# By default prints repo slugs to stdout. Pass -o to also save repo URLs -
 # bare -o generates <PWD>/projects-<username>_<timestamp>.txt
 # (projects-unused-<username>_… with --only-unused), -o <path> uses that path.
 #
@@ -23,16 +23,13 @@
 
 set -u
 
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
-ONLY_UNUSED=0
-OUTPUT_FILE=""
-CONCURRENCY="${CONCURRENCY:-10}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
 
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
+ONLY_UNUSED=0
+CONCURRENCY="${CONCURRENCY:-10}"
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -70,33 +67,16 @@ if [[ -z "$GH_USER" ]]; then
     exit 1
 fi
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
+require_cmd gh "brew install gh"
+validate_visibility "$VISIBILITY"
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
-    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    TIMESTAMP="$(make_timestamp)"
     if [[ "$ONLY_UNUSED" == "1" ]]; then
-        OUTPUT_FILE="$PWD/projects-unused-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/projects-unused-${GH_USER}_${TIMESTAMP}.txt"
     else
-        OUTPUT_FILE="$PWD/projects-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/projects-${GH_USER}_${TIMESTAMP}.txt"
     fi
-fi
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
-    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
-    C_YELLOW=""; C_BLUE=""; C_BROWN=""
 fi
 
 vis_args=()
@@ -106,12 +86,12 @@ jq_filter='.[] | select(.hasProjectsEnabled==true)'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
 jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
 
-echo "${C_BOLD}User:${C_RESET}        $GH_USER"
-echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
-echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
-echo "${C_BOLD}Filter:${C_RESET}      $([[ $ONLY_UNUSED == 1 ]] && echo "unused only" || echo "all repos with Projects on")"
-echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
-[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+print_kv "User" "$GH_USER"
+print_kv "Visibility" "$VISIBILITY"
+print_kv "Forks" "$([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+print_kv "Filter" "$([[ $ONLY_UNUSED == 1 ]] && echo "unused only" || echo "all repos with Projects on")"
+print_kv "Concurrency" "$CONCURRENCY"
+[[ -n "$OUTPUT_FILE" ]] && print_kv "Output" "$OUTPUT_FILE"
 echo
 
 repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
@@ -129,25 +109,25 @@ echo
 
 # Emits "<slug>\t<count>\t<vis>\t<fork>\t<archived>" with the number of linked
 # Projects v2. A failed count (network, auth, missing read:project scope) is
-# inconclusive — warn on stderr and skip, rather than misreport it as unused.
+# inconclusive - warn on stderr and skip, rather than misreport it as unused.
 count_projects() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
     local owner="${slug%%/*}" name="${slug#*/}"
     local count
-    # shellcheck disable=SC2016  # $owner/$name are GraphQL variables — must stay literal, gh binds them via -f
+    # shellcheck disable=SC2016  # $owner/$name are GraphQL variables - must stay literal, gh binds them via -f
     count=$(gh api graphql \
         -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){projectsV2(first:1){totalCount}}}' \
         -f owner="$owner" -f name="$name" \
         --jq '.data.repository.projectsV2.totalCount' 2>/dev/null)
     if [[ ! "$count" =~ ^[0-9]+$ ]]; then
-        printf "WARN  %s — projects check inconclusive (missing read:project scope?)\n" "$slug" >&2
+        printf "WARN  %s - projects check inconclusive (missing read:project scope?)\n" "$slug" >&2
         return 0
     fi
     printf "%s\t%s\t%s\t%s\t%s\n" "$slug" "$count" "$vis" "$is_fork" "$is_archived"
 }
 export -f count_projects
 
-# Note: TSV fields are passed as separate positional args — BSD xargs collapses
+# Note: TSV fields are passed as separate positional args - BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
 results=$(echo "$repos" | tr '\t' ' ' \
     | xargs -n 4 -P "$CONCURRENCY" bash -c 'count_projects "$@"' _)
@@ -165,10 +145,7 @@ if [[ -n "$display" ]]; then
         else
             count_label="${C_DIM}$count projects${C_RESET}"
         fi
-        badges=""
-        [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
-        [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
-        [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        badges="$(format_badges "$vis" "$is_fork" "$is_archived")"
         printf "${C_GREEN}✓${C_RESET} %-50s %s%s\n" "$slug" "$count_label" "$badges"
     done <<< "$(echo "$display" | sort)"
 fi

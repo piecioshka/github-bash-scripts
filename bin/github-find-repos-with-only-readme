@@ -14,7 +14,7 @@
 # With -p / --check-pages each found repo is also checked for GitHub Pages
 # (via `gh api repos/<slug>/pages`): enabled shows the Pages URL in green,
 # disabled shows a red "pages off".
-# By default prints repo slugs to stdout. Pass -o to also save repo URLs —
+# By default prints repo slugs to stdout. Pass -o to also save repo URLs -
 # bare -o generates <PWD>/readme-only-<username>_<timestamp>.txt, -o <path> uses
 # that path.
 #
@@ -22,16 +22,13 @@
 
 set -u
 
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
-CHECK_PAGES=0
-OUTPUT_FILE=""
-CONCURRENCY="${CONCURRENCY:-10}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
 
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
+CHECK_PAGES=0
+CONCURRENCY="${CONCURRENCY:-10}"
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -69,29 +66,12 @@ if [[ -z "$GH_USER" ]]; then
     exit 1
 fi
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
+require_cmd gh "brew install gh"
+validate_visibility "$VISIBILITY"
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
-    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    OUTPUT_FILE="$PWD/readme-only-$GH_USER""_$TIMESTAMP.txt"
-fi
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_RED=$'\033[31m'; C_DIM=$'\033[90m'
-    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_RED=""; C_DIM=""
-    C_YELLOW=""; C_BLUE=""; C_BROWN=""
+    TIMESTAMP="$(make_timestamp)"
+    OUTPUT_FILE="$PWD/readme-only-${GH_USER}_${TIMESTAMP}.txt"
 fi
 
 vis_args=()
@@ -101,11 +81,11 @@ jq_filter='.[]'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
 jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
 
-echo "${C_BOLD}User:${C_RESET}        $GH_USER"
-echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
-echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
-echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
-[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+print_kv "User" "$GH_USER"
+print_kv "Visibility" "$VISIBILITY"
+print_kv "Forks" "$([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+print_kv "Concurrency" "$CONCURRENCY"
+[[ -n "$OUTPUT_FILE" ]] && print_kv "Output" "$OUTPUT_FILE"
 echo
 
 repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
@@ -124,12 +104,12 @@ echo
 check_readme_only() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
     local files pages="-" pages_url="-"
-    # Rate-limited calls must not be silently counted as "not README-only" —
+    # Rate-limited calls must not be silently counted as "not README-only" -
     # a 403 here means the whole run is undercounting, so surface it.
     if ! files=$(gh api "repos/$slug/git/trees/HEAD?recursive=1" \
         --jq '[.tree[] | select(.type=="blob") | .path]' 2>&1); then
         grep -qi 'rate limit' <<< "$files" \
-            && printf "WARN  %s — skipped: GitHub API rate limit hit, result is incomplete\n" "$slug" >&2
+            && printf "WARN  %s - skipped: GitHub API rate limit hit, result is incomplete\n" "$slug" >&2
         return 0
     fi
     [[ "$files" == '["README.md"]' ]] || return 0
@@ -146,7 +126,7 @@ check_readme_only() {
 export -f check_readme_only
 export CHECK_PAGES
 
-# Note: TSV fields are passed as separate positional args — BSD xargs collapses
+# Note: TSV fields are passed as separate positional args - BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
 results=$(echo "$repos" | tr '\t' ' ' \
     | xargs -n 4 -P "$CONCURRENCY" bash -c 'check_readme_only "$@"' _)
@@ -160,10 +140,7 @@ if [[ -n "$results" ]]; then
         elif [[ "$pages" == "off" ]]; then
             pages_label=" ${C_RED}pages off${C_RESET}"
         fi
-        badges=""
-        [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
-        [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
-        [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        badges="$(format_badges "$vis" "$is_fork" "$is_archived")"
         if [[ "$CHECK_PAGES" == "1" ]]; then
             printf "${C_GREEN}✓${C_RESET} %-45s%s%s\n" "$slug" "$pages_label" "$badges"
         else

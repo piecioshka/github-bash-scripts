@@ -17,7 +17,7 @@
 # Pass -n / --no-check for an instant list straight from repo metadata,
 # without touching the homepages over HTTP (-e makes no sense then).
 # Default mode: homepage URLs. With -r / --repo-url: repository URLs.
-# By default prints to stdout only. Pass -o to also save a file — bare -o
+# By default prints to stdout only. Pass -o to also save a file - bare -o
 # generates <PWD>/homepage-checked[-repos]-<username>_<timestamp>.txt
 # (homepage-broken[-repos]-<username>_… with --only-broken and
 # homepage[-repos]-<username>_… with --no-check), -o <path> uses that path.
@@ -30,19 +30,16 @@
 
 set -u
 
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
+
 BROKEN_ONLY=0
 NO_CHECK=0
-OUTPUT_FILE=""
 OUTPUT_MODE="homepage"    # homepage | repo
 CONCURRENCY="${CONCURRENCY:-10}"
 TIMEOUT="${TIMEOUT:-15}"
-
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -84,15 +81,9 @@ if [[ -z "$GH_USER" ]]; then
     exit 1
 fi
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
+require_cmd gh "brew install gh"
+require_cmd curl
+validate_visibility "$VISIBILITY"
 
 if [[ "$NO_CHECK" == "1" && "$BROKEN_ONLY" == "1" ]]; then
     echo "ERROR: -n/--no-check cannot be combined with -e/--only-broken" >&2
@@ -100,37 +91,16 @@ if [[ "$NO_CHECK" == "1" && "$BROKEN_ONLY" == "1" ]]; then
 fi
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
-    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    TIMESTAMP="$(make_timestamp)"
     PREFIX="homepage-checked"
     [[ "$BROKEN_ONLY" == "1" ]] && PREFIX="homepage-broken"
     [[ "$NO_CHECK" == "1" ]] && PREFIX="homepage"
     if [[ "$OUTPUT_MODE" == "homepage" ]]; then
-        OUTPUT_FILE="$PWD/$PREFIX-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/${PREFIX}-${GH_USER}_${TIMESTAMP}.txt"
     else
-        OUTPUT_FILE="$PWD/$PREFIX-repos-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/${PREFIX}-repos-${GH_USER}_${TIMESTAMP}.txt"
     fi
 fi
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_RED=$'\033[31m'; C_DIM=$'\033[90m'
-    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_RED=""; C_DIM=""
-    C_YELLOW=""; C_BLUE=""; C_BROWN=""
-fi
-
-paint_status() {
-    local status="$1"
-    local padded
-    printf -v padded "%-6s" "$status"
-    case "$status" in
-        OK)     printf "%s%s%s" "$C_GREEN" "$padded" "$C_RESET" ;;
-        BROKEN) printf "%s%s%s" "$C_RED"   "$padded" "$C_RESET" ;;
-        *)      printf "%s%s%s" "$C_DIM"   "$padded" "$C_RESET" ;;
-    esac
-}
 
 vis_args=()
 [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
@@ -139,18 +109,18 @@ jq_filter='.[]'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
 jq_filter="$jq_filter | select(.homepageUrl != null and .homepageUrl != \"\") | [.nameWithOwner, .homepageUrl, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
 
-echo "${C_BOLD}User:${C_RESET}        $GH_USER"
-echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
-echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
-echo "${C_BOLD}Mode:${C_RESET}        $OUTPUT_MODE"
+print_kv "User" "$GH_USER"
+print_kv "Visibility" "$VISIBILITY"
+print_kv "Forks" "$([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+print_kv "Mode" "$OUTPUT_MODE"
 if [[ "$NO_CHECK" == "1" ]]; then
-    echo "${C_BOLD}Check:${C_RESET}       skipped (metadata only)"
+    print_kv "Check" "skipped (metadata only)"
 else
-    echo "${C_BOLD}Filter:${C_RESET}      $([[ $BROKEN_ONLY == 1 ]] && echo "broken only" || echo "all rows")"
-    echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
-    echo "${C_BOLD}Timeout:${C_RESET}     ${TIMEOUT}s"
+    print_kv "Filter" "$([[ $BROKEN_ONLY == 1 ]] && echo "broken only" || echo "all rows")"
+    print_kv "Concurrency" "$CONCURRENCY"
+    print_kv "Timeout" "${TIMEOUT}s"
 fi
-[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+[[ -n "$OUTPUT_FILE" ]] && print_kv "Output" "$OUTPUT_FILE"
 echo
 
 # 1. Fetch repos with non-empty homepage
@@ -189,7 +159,7 @@ export -f check_entry
 export TIMEOUT
 
 if [[ "$NO_CHECK" == "1" ]]; then
-    # No HTTP round-trips — synthesize rows straight from the metadata.
+    # No HTTP round-trips - synthesize rows straight from the metadata.
     results=$(echo "$entries" | awk -F'\t' '{ print "-\t-\t" $0 }')
 else
     results=$(echo "$entries" \
@@ -203,10 +173,7 @@ display="$results"
 
 echo "$display" | sort | while IFS=$'\t' read -r status code slug url vis is_fork is_archived; do
     [[ -z "$status" ]] && continue
-    badges=""
-    [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
-    [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
-    [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+    badges="$(format_badges "$vis" "$is_fork" "$is_archived")"
     if [[ "$status" == "-" ]]; then
         printf "${C_GREEN}✓${C_RESET} %-50s  %s%s\n" "$slug" "$url" "$badges"
     else

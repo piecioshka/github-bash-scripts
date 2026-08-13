@@ -2,7 +2,7 @@
 # Usage:
 #   github-enable-pages -f links.txt                     # repos from a file
 #   echo "https://github.com/o/r" | github-enable-pages  # repos from stdin
-#   github-enable-pages owner/repo another/repo        # positional slugs
+#   github-enable-pages owner/repo another/repo          # positional slugs
 #   github-enable-pages -f links.txt -b gh-pages         # custom source branch (default: main)
 #   github-enable-pages -f links.txt -b main -p /docs    # custom source path (default: /)
 #   DRY_RUN=1 github-enable-pages -f links.txt           # show what would be done
@@ -19,15 +19,14 @@
 
 set -u
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
+
 DRY_RUN="${DRY_RUN:-0}"
 BRANCH="main"
 PATH_IN_REPO="/"
-INPUT_FILE=""
-POSITIONAL=()
-
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -54,56 +53,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'
-    C_RED=$'\033[31m'; C_DIM=$'\033[90m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""
-fi
-
-paint_status() {
-    local status="$1"
-    local padded
-    printf -v padded "%-6s" "$status"
-    case "$status" in
-        OK)   printf "%s%s%s" "$C_GREEN"  "$padded" "$C_RESET" ;;
-        DRY)  printf "%s%s%s" "$C_YELLOW" "$padded" "$C_RESET" ;;
-        HAVE) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
-        FAIL) printf "%s%s%s" "$C_RED"    "$padded" "$C_RESET" ;;
-        SKIP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
-        *)    printf "%s" "$padded" ;;
-    esac
-}
-
-print_row() {
-    local status="$1"
-    local repo="$2"
-    local details="${3:-}"
-    printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
-}
-
-url_to_slug() {
-    local url="$1"
-    url="${url#"${url%%[![:space:]]*}"}"
-    url="${url%"${url##*[![:space:]]}"}"
-    if [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
-        local repo="${BASH_REMATCH[2]%.git}"
-        echo "${BASH_REMATCH[1]}/$repo"
-        return
-    fi
-    if [[ "$url" =~ ^https?://([^./]+)\.github\.io/([^/]+) ]]; then
-        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
-        return
-    fi
-    echo ""
-}
+require_cmd gh "brew install gh"
 
 enable_pages() {
     local url="$1"
@@ -135,41 +85,7 @@ enable_pages() {
     fi
 }
 
-input_source() {
-    if [[ ${#POSITIONAL[@]} -gt 0 ]]; then
-        echo "${C_BOLD}Source:${C_RESET} positional arguments" >&2
-        local arg
-        for arg in "${POSITIONAL[@]}"; do
-            if [[ "$arg" == http*://* ]]; then
-                echo "$arg"
-            else
-                echo "https://github.com/${arg%.git}"
-            fi
-        done
-        return
-    fi
-
-    if [[ -n "$INPUT_FILE" ]]; then
-        if [[ ! -f "$INPUT_FILE" ]]; then
-            echo "ERROR: file does not exist: $INPUT_FILE" >&2
-            exit 1
-        fi
-        echo "${C_BOLD}Source:${C_RESET} file $INPUT_FILE" >&2
-        cat "$INPUT_FILE"
-        return
-    fi
-
-    if [[ ! -t 0 ]]; then
-        echo "${C_BOLD}Source:${C_RESET} stdin" >&2
-        cat
-        return
-    fi
-
-    show_usage
-    exit 1
-}
-
-[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
 
 input_source \
     | grep -vE '^[[:space:]]*(#|$)' \

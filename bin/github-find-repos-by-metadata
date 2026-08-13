@@ -8,31 +8,28 @@
 #   github-find-repos-by-metadata -u <username> -q <query> -E               # treat query as regex
 #   github-find-repos-by-metadata -u <username> -q <query> -o               # also save repo URLs to auto-named file
 #   github-find-repos-by-metadata -u <username> -q <query> -o out.txt       # also save repo URLs to a specific file
-#   github-find-repos-by-metadata --help                                # show help
+#   github-find-repos-by-metadata --help                                    # show help
 #
 # Searches across repo metadata (name, description, homepage, topics, language).
 # Case-insensitive substring match by default. Use -E to interpret the query as
 # an extended regex. Use -c for case-sensitive matching.
 #
 # By default prints matched rows to stdout only. Pass -o to also save unique
-# repo URLs — bare -o generates <PWD>/search-<username>-<query>_<timestamp>.txt,
+# repo URLs - bare -o generates <PWD>/search-<username>-<query>_<timestamp>.txt,
 # -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated), jq
 
 set -u
 
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
+
 QUERY=""
 CASE_SENSITIVE=0
 REGEX=0
-OUTPUT_FILE=""
-
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -76,45 +73,27 @@ if [[ -z "$QUERY" ]]; then
     echo "ERROR: -q <query> is required" >&2; exit 1
 fi
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found" >&2; exit 1
-fi
-if ! command -v jq > /dev/null 2>&1; then
-    echo "ERROR: jq not found. Install with: brew install jq" >&2; exit 1
-fi
-
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
+require_cmd gh "brew install gh"
+require_cmd jq "brew install jq"
+validate_visibility "$VISIBILITY"
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
-    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    TIMESTAMP="$(make_timestamp)"
     # sanitize query for filename (keep alphanumeric, dash, underscore)
     SAFE_Q=$(echo "$QUERY" | tr -c '[:alnum:]_-' '_' | sed 's/__*/_/g; s/^_//; s/_$//')
     [[ -z "$SAFE_Q" ]] && SAFE_Q="query"
-    OUTPUT_FILE="$PWD/search-$GH_USER-$SAFE_Q""_$TIMESTAMP.txt"
-fi
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_CYAN=$'\033[36m'; C_DIM=$'\033[90m'
-    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_CYAN=""; C_DIM=""
-    C_YELLOW=""; C_BLUE=""; C_BROWN=""
+    OUTPUT_FILE="$PWD/search-$GH_USER-${SAFE_Q}_${TIMESTAMP}.txt"
 fi
 
 vis_args=()
 [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
 
-echo "${C_BOLD}User:${C_RESET}        $GH_USER"
-echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
-echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
-echo "${C_BOLD}Query:${C_RESET}       $QUERY"
-echo "${C_BOLD}Match:${C_RESET}       $([[ $CASE_SENSITIVE == 1 ]] && echo case-sensitive || echo case-insensitive) / $([[ $REGEX == 1 ]] && echo regex || echo substring)"
-[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+print_kv "User" "$GH_USER"
+print_kv "Visibility" "$VISIBILITY"
+print_kv "Forks" "$([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+print_kv "Query" "$QUERY"
+print_kv "Match" "$([[ $CASE_SENSITIVE == 1 ]] && echo case-sensitive || echo case-insensitive) / $([[ $REGEX == 1 ]] && echo regex || echo substring)"
+[[ -n "$OUTPUT_FILE" ]] && print_kv "Output" "$OUTPUT_FILE"
 echo
 
 # Fetch metadata for all repos in a single API call, then run two jq passes:
@@ -170,16 +149,13 @@ if [[ -z "$matches" ]]; then
     exit 0
 fi
 
-# Pretty print — group by slug
+# Pretty print - group by slug
 lookup_badges() {
-    local slug="$1" line vis is_fork is_archived badges=""
+    local slug="$1" line vis is_fork is_archived
     line=$(echo "$meta_tsv" | awk -F'\t' -v s="$slug" '$1==s {print; exit}')
     [[ -z "$line" ]] && return
     IFS=$'\t' read -r _ vis is_fork is_archived <<< "$line"
-    [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
-    [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
-    [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
-    printf "%s" "$badges"
+    format_badges "$vis" "$is_fork" "$is_archived"
 }
 
 current_slug=""

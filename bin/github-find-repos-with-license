@@ -10,11 +10,11 @@
 #   github-find-repos-with-license --help                          # show help
 #
 # Lists repositories whose HEAD root tree contains a LICENSE-like file
-# (LICENSE, LICENCE, COPYING, UNLICENSE — optionally with an extension or a
+# (LICENSE, LICENCE, COPYING, UNLICENSE - optionally with an extension or a
 # -SUFFIX, e.g. LICENSE.md, LICENSE.txt or LICENSE-MIT / LICENSE-APACHE).
 # With -n / --node-only, also requires a root package.json (Node.js projects).
 # Handy for spotting repos that carry a license file you may want to drop.
-# By default prints repo slugs to stdout. Pass -o to also save repo URLs —
+# By default prints repo slugs to stdout. Pass -o to also save repo URLs -
 # bare -o generates <PWD>/licenses-<username>_<timestamp>.txt, -o <path> uses
 # that path.
 #
@@ -22,16 +22,13 @@
 
 set -u
 
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
-NODE_ONLY=0
-OUTPUT_FILE=""
-CONCURRENCY="${CONCURRENCY:-10}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
 
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
+NODE_ONLY=0
+CONCURRENCY="${CONCURRENCY:-10}"
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -69,30 +66,12 @@ if [[ -z "$GH_USER" ]]; then
     exit 1
 fi
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
+require_cmd gh "brew install gh"
+validate_visibility "$VISIBILITY"
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
-    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    OUTPUT_FILE="$PWD/licenses-$GH_USER""_$TIMESTAMP.txt"
-fi
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
-    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
-    C_CYAN=$'\033[36m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
-    C_YELLOW=""; C_BLUE=""; C_BROWN=""; C_CYAN=""
+    TIMESTAMP="$(make_timestamp)"
+    OUTPUT_FILE="$PWD/licenses-${GH_USER}_${TIMESTAMP}.txt"
 fi
 
 vis_args=()
@@ -102,12 +81,12 @@ jq_filter='.[]'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
 jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring), (.licenseInfo.key // \"-\")] | @tsv"
 
-echo "${C_BOLD}User:${C_RESET}        $GH_USER"
-echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
-echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
-echo "${C_BOLD}Node-only:${C_RESET}   $([[ $NODE_ONLY == 1 ]] && echo yes || echo no)"
-echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
-[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+print_kv "User" "$GH_USER"
+print_kv "Visibility" "$VISIBILITY"
+print_kv "Forks" "$([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+print_kv "Node-only" "$([[ $NODE_ONLY == 1 ]] && echo yes || echo no)"
+print_kv "Concurrency" "$CONCURRENCY"
+[[ -n "$OUTPUT_FILE" ]] && print_kv "Output" "$OUTPUT_FILE"
 echo
 
 repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
@@ -140,7 +119,7 @@ check_license() {
 export -f check_license
 export NODE_ONLY
 
-# Note: TSV fields are passed as separate positional args — BSD xargs collapses
+# Note: TSV fields are passed as separate positional args - BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 5 instead.
 results=$(echo "$repos" | tr '\t' ' ' \
     | xargs -n 5 -P "$CONCURRENCY" bash -c 'check_license "$@"' _)
@@ -150,10 +129,7 @@ if [[ -n "$results" ]]; then
         [[ -z "$slug" ]] && continue
         lic_badge=""
         [[ "$lic_key" != "-" && -n "$lic_key" ]] && lic_badge=" ${C_CYAN}[$lic_key]${C_RESET}"
-        badges=""
-        [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
-        [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
-        [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        badges="$(format_badges "$vis" "$is_fork" "$is_archived")"
         printf "${C_GREEN}✓${C_RESET} %-60s ${C_DIM}→${C_RESET} %s%s%s\n" "$slug" "$license_file" "$lic_badge" "$badges"
     done <<< "$(echo "$results" | sort)"
 fi

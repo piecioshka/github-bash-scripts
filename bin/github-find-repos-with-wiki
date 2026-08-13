@@ -15,7 +15,7 @@
 # A wiki lives in a separate git repo at <repo>.wiki.git; an empty wiki has no
 # such repo, so `git ls-remote` returns no refs. Page counts come from a
 # blobless, no-checkout clone of the wiki repo (trees only, no file contents).
-# By default prints repo slugs to stdout. Pass -o to also save repo URLs —
+# By default prints repo slugs to stdout. Pass -o to also save repo URLs -
 # bare -o generates <PWD>/wiki-<username>_<timestamp>.txt (wiki-unused-<username>_… with
 # --only-unused), -o <path> uses that path.
 #
@@ -23,16 +23,13 @@
 
 set -u
 
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
-ONLY_UNUSED=0
-OUTPUT_FILE=""
-CONCURRENCY="${CONCURRENCY:-10}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
 
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
+ONLY_UNUSED=0
+CONCURRENCY="${CONCURRENCY:-10}"
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -70,45 +67,22 @@ if [[ -z "$GH_USER" ]]; then
     exit 1
 fi
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-if ! command -v git > /dev/null 2>&1; then
-    echo "ERROR: git not found." >&2
-    exit 1
-fi
+require_cmd gh "brew install gh"
+require_cmd git
+validate_visibility "$VISIBILITY"
 
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
-
-# Token is needed so the wiki check works for private repos too. It is passed to
-# git via a credential helper reading an env var — never on the command line.
-if ! GH_WIKI_TOKEN="$(gh auth token 2>/dev/null)" || [[ -z "$GH_WIKI_TOKEN" ]]; then
-    echo "ERROR: cannot read gh auth token. Run: gh auth login" >&2
-    exit 1
-fi
-export GH_WIKI_TOKEN
+# Token is needed so the wiki check works for private repos too. It is passed
+# to git via the git_authed credential helper reading an env var - never on
+# the command line.
+require_gh_token
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
-    TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    TIMESTAMP="$(make_timestamp)"
     if [[ "$ONLY_UNUSED" == "1" ]]; then
-        OUTPUT_FILE="$PWD/wiki-unused-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/wiki-unused-${GH_USER}_${TIMESTAMP}.txt"
     else
-        OUTPUT_FILE="$PWD/wiki-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/wiki-${GH_USER}_${TIMESTAMP}.txt"
     fi
-fi
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_DIM=$'\033[90m'
-    C_YELLOW=$'\033[33m'; C_BLUE=$'\033[94m'; C_BROWN=$'\033[38;5;94m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_DIM=""
-    C_YELLOW=""; C_BLUE=""; C_BROWN=""
 fi
 
 vis_args=()
@@ -118,12 +92,12 @@ jq_filter='.[] | select(.hasWikiEnabled==true)'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
 jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
 
-echo "${C_BOLD}User:${C_RESET}        $GH_USER"
-echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
-echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
-echo "${C_BOLD}Filter:${C_RESET}      $([[ $ONLY_UNUSED == 1 ]] && echo "empty wikis only" || echo "all wikis")"
-echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
-[[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
+print_kv "User" "$GH_USER"
+print_kv "Visibility" "$VISIBILITY"
+print_kv "Forks" "$([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
+print_kv "Filter" "$([[ $ONLY_UNUSED == 1 ]] && echo "empty wikis only" || echo "all wikis")"
+print_kv "Concurrency" "$CONCURRENCY"
+[[ -n "$OUTPUT_FILE" ]] && print_kv "Output" "$OUTPUT_FILE"
 echo
 
 repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
@@ -144,8 +118,8 @@ echo
 # wiki has no such repo, so GitHub reports "Repository not found" (0 pages).
 # A reachable wiki gets a blobless, no-checkout clone and its pages are counted
 # as files with a wiki markup extension. Any other failure (network, auth, rate
-# limit) is inconclusive — warn on stderr and skip, rather than misreport.
-# Auth via the GH_WIKI_TOKEN helper.
+# limit) is inconclusive - warn on stderr and skip, rather than misreport.
+# Auth via the GH_HELPER_TOKEN helper (git_authed).
 inspect_wiki() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
     local out rc has_wiki pages tmp
@@ -154,36 +128,30 @@ inspect_wiki() {
     # is not actually available, e.g. private repos on a free plan). Trust the
     # REST has_wiki field as the source of truth and skip repos without a wiki.
     if ! has_wiki=$(gh api "repos/$slug" --jq '.has_wiki' 2>/dev/null); then
-        printf "WARN  %s — wiki check inconclusive: cannot read repo via REST\n" "$slug" >&2
+        printf "WARN  %s - wiki check inconclusive: cannot read repo via REST\n" "$slug" >&2
         return 0
     fi
     [[ "$has_wiki" == "true" ]] || { printf "SKIP\t%s\n" "$slug"; return 0; }
-    # shellcheck disable=SC2016  # $1/$GH_WIKI_TOKEN must stay literal — git expands them when it runs the helper
-    out=$(git -c credential.helper='' \
-        -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
-        ls-remote "https://github.com/$slug.wiki.git" 2>&1)
+    out=$(git_authed ls-remote "https://github.com/$slug.wiki.git" 2>&1)
     rc=$?
     if [[ $rc -ne 0 ]]; then
         if grep -qi 'not found' <<< "$out"; then
             pages=0
         else
-            printf "WARN  %s — wiki check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$out")" >&2
+            printf "WARN  %s - wiki check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$out")" >&2
             return 0
         fi
     elif [[ -z "$out" ]]; then
         pages=0
     else
-        tmp=$(mktemp -d) || { printf "WARN  %s — cannot create temp dir\n" "$slug" >&2; return 0; }
-        # shellcheck disable=SC2016  # same literal-expansion rule as above
-        if git -c credential.helper='' \
-            -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
-            clone --quiet --depth 1 --filter=blob:none --no-checkout \
+        tmp=$(mktemp -d) || { printf "WARN  %s - cannot create temp dir\n" "$slug" >&2; return 0; }
+        if git_authed clone --quiet --depth 1 --filter=blob:none --no-checkout \
             "https://github.com/$slug.wiki.git" "$tmp/wiki" 2>/dev/null; then
             pages=$(git -C "$tmp/wiki" ls-tree -r --name-only HEAD 2>/dev/null \
                 | grep -ciE '\.(md|markdown|mdown|mkdn|textile|rdoc|org|creole|rst|asciidoc|adoc|wiki|mediawiki|pod)$' || true)
         else
             rm -rf "$tmp"
-            printf "WARN  %s — wiki check inconclusive: clone failed\n" "$slug" >&2
+            printf "WARN  %s - wiki check inconclusive: clone failed\n" "$slug" >&2
             return 0
         fi
         rm -rf "$tmp"
@@ -192,13 +160,13 @@ inspect_wiki() {
 }
 export -f inspect_wiki
 
-# Note: TSV fields are passed as separate positional args — BSD xargs collapses
+# Note: TSV fields are passed as separate positional args - BSD xargs collapses
 # tabs inside -I {} substitution, so we split on whitespace via -n 4 instead.
 raw_results=$(echo "$repos" | tr '\t' ' ' \
     | xargs -n 4 -P "$CONCURRENCY" bash -c 'inspect_wiki "$@"' _)
 
 # Candidates whose wiki flag is on but the feature is not actually available
-# (REST has_wiki=false) come back as SKIP rows — count and drop them.
+# (REST has_wiki=false) come back as SKIP rows - count and drop them.
 skipped=$(echo "$raw_results" | awk -F'\t' '$1=="SKIP"' | grep -c . || true)
 results=$(echo "$raw_results" | awk -F'\t' '$1!="SKIP"')
 
@@ -215,10 +183,7 @@ if [[ -n "$display" ]]; then
         else
             pages_label="${C_DIM}$pages pages${C_RESET}"
         fi
-        badges=""
-        [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
-        [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
-        [[ "$is_archived" == "true" ]] && badges="$badges ${C_BROWN}[📦 archived]${C_RESET}"
+        badges="$(format_badges "$vis" "$is_fork" "$is_archived")"
         printf "${C_GREEN}✓${C_RESET} %-50s %s%s\n" "$slug" "$pages_label" "$badges"
     done <<< "$(echo "$display" | sort)"
 fi

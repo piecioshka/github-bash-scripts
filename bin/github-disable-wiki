@@ -6,14 +6,14 @@
 #   github-disable-wiki -u <username> -F                 # include forks
 #   github-disable-wiki -f links.txt                     # repos from a file
 #   echo "https://github.com/o/r" | github-disable-wiki  # repos from stdin
-#   github-disable-wiki owner/repo another/repo        # positional slugs
+#   github-disable-wiki owner/repo another/repo          # positional slugs
 #   github-disable-wiki -u <username> --force            # disable wiki even if it has pages
 #   DRY_RUN=1 github-disable-wiki -u <username>          # show what would be done
 #   github-disable-wiki --help                           # show help
 #
 # For each repo on the list: if the wiki feature is enabled but the wiki has no
 # pages (empty wiki), disables the wiki feature. Repos whose wiki is already off,
-# or whose wiki HAS pages, are skipped — unless --force, which disables the wiki
+# or whose wiki HAS pages, are skipped - unless --force, which disables the wiki
 # feature regardless of content (the pages are NOT deleted; re-enabling the wiki
 # brings them back).
 #
@@ -27,17 +27,12 @@
 
 set -u
 
-DRY_RUN="${DRY_RUN:-0}"
-INPUT_FILE=""
-POSITIONAL=()
-GH_USER=""
-VISIBILITY="all"
-INCLUDE_FORKS=0
-FORCE=0
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
 
-show_usage() {
-    sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
-}
+DRY_RUN="${DRY_RUN:-0}"
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -68,79 +63,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if ! command -v gh > /dev/null 2>&1; then
-    echo "ERROR: gh CLI not found. Install with: brew install gh" >&2
-    exit 1
-fi
-if ! command -v git > /dev/null 2>&1; then
-    echo "ERROR: git not found." >&2
-    exit 1
-fi
+require_cmd gh "brew install gh"
+require_cmd git
+validate_visibility "$VISIBILITY"
 
-case "$VISIBILITY" in
-    public|private|all) ;;
-    *) echo "ERROR: invalid visibility '$VISIBILITY' (use: public, private, all)" >&2; exit 1 ;;
-esac
+# Token for the wiki content check - passed to git via the git_authed
+# credential helper that reads an env var, never on the command line.
+require_gh_token
 
-# Token for the wiki content check — passed to git via a credential helper that
-# reads this env var, never on the command line.
-if ! GH_WIKI_TOKEN="$(gh auth token 2>/dev/null)" || [[ -z "$GH_WIKI_TOKEN" ]]; then
-    echo "ERROR: cannot read gh auth token. Run: gh auth login" >&2
-    exit 1
-fi
-export GH_WIKI_TOKEN
-
-# colors (tty only)
-if [[ -t 1 ]]; then
-    C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'
-    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'
-    C_RED=$'\033[31m'; C_DIM=$'\033[90m'
-else
-    C_RESET=""; C_BOLD=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_DIM=""
-fi
-
-paint_status() {
-    local status="$1"
-    local padded
-    printf -v padded "%-6s" "$status"
-    case "$status" in
-        OK)   printf "%s%s%s" "$C_GREEN"  "$padded" "$C_RESET" ;;
-        DRY)  printf "%s%s%s" "$C_YELLOW" "$padded" "$C_RESET" ;;
-        KEEP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
-        FAIL) printf "%s%s%s" "$C_RED"    "$padded" "$C_RESET" ;;
-        SKIP) printf "%s%s%s" "$C_DIM"    "$padded" "$C_RESET" ;;
-        *)    printf "%s" "$padded" ;;
-    esac
-}
-
-print_row() {
-    local status="$1"
-    local repo="$2"
-    local details="${3:-}"
-    printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
-}
-
-url_to_slug() {
-    local url="$1"
-    url="${url#"${url%%[![:space:]]*}"}"
-    url="${url%"${url##*[![:space:]]}"}"
-    if [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
-        local repo="${BASH_REMATCH[2]%.git}"
-        echo "${BASH_REMATCH[1]}/$repo"
-        return
-    fi
-    echo ""
-}
-
-# Echoes the wiki state: "pages" (has >=1 page), "empty" (no wiki repo —
+# Echoes the wiki state: "pages" (has >=1 page), "empty" (no wiki repo -
 # GitHub reports "Repository not found"), or "error" (inconclusive: network,
-# auth or rate limit). Auth comes from the GH_WIKI_TOKEN credential helper.
+# auth or rate limit). Auth comes from the GH_HELPER_TOKEN credential helper.
 wiki_state() {
     local slug="$1" out rc
-    # shellcheck disable=SC2016  # $1/$GH_WIKI_TOKEN must stay literal — git expands them when it runs the helper
-    out=$(git -c credential.helper='' \
-        -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
-        ls-remote "https://github.com/$slug.wiki.git" 2>&1)
+    out=$(git_authed ls-remote "https://github.com/$slug.wiki.git" 2>&1)
     rc=$?
     if [[ $rc -eq 0 ]]; then
         [[ -n "$out" ]] && echo "pages" || echo "empty"
@@ -172,23 +108,23 @@ disable_wiki() {
         return
     fi
 
-    # Wiki feature is on — decide based on its content (unless forced).
+    # Wiki feature is on - decide based on its content (unless forced).
     if [[ "$FORCE" != "1" ]]; then
         local state
         state=$(wiki_state "$slug")
         case "$state" in
             pages)
-                print_row "KEEP" "$slug" "wiki has pages — not empty (use --force to disable anyway)"
+                print_row "KEEP" "$slug" "wiki has pages - not empty (use --force to disable anyway)"
                 return ;;
             error)
-                print_row "FAIL" "$slug" "wiki check inconclusive (network/auth?) — skipped for safety"
+                print_row "FAIL" "$slug" "wiki check inconclusive (network/auth?) - skipped for safety"
                 return ;;
         esac
     fi
 
     if [[ "$DRY_RUN" == "1" ]]; then
         local note="would disable wiki feature"
-        [[ "$FORCE" == "1" ]] && note="$note [forced — may have pages]"
+        [[ "$FORCE" == "1" ]] && note="$note [forced - may have pages]"
         print_row "DRY" "$slug" "$note"
         return
     fi
@@ -201,60 +137,10 @@ disable_wiki() {
     fi
 }
 
-input_source() {
-    if [[ ${#POSITIONAL[@]} -gt 0 ]]; then
-        echo "${C_BOLD}Source:${C_RESET} positional arguments" >&2
-        local arg
-        for arg in "${POSITIONAL[@]}"; do
-            if [[ "$arg" == http*://* ]]; then
-                echo "$arg"
-            else
-                echo "https://github.com/${arg%.git}"
-            fi
-        done
-        return
-    fi
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
+[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode - will disable wiki even if it has pages ==${C_RESET}"
 
-    if [[ -n "$INPUT_FILE" ]]; then
-        if [[ ! -f "$INPUT_FILE" ]]; then
-            echo "ERROR: file does not exist: $INPUT_FILE" >&2
-            exit 1
-        fi
-        echo "${C_BOLD}Source:${C_RESET} file $INPUT_FILE" >&2
-        cat "$INPUT_FILE"
-        return
-    fi
-
-    if [[ -n "$GH_USER" ]]; then
-        local vis_args=()
-        [[ "$VISIBILITY" != "all" ]] && vis_args=(--visibility "$VISIBILITY")
-        local jq_filter='.[] | select(.hasWikiEnabled==true)'
-        [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter="$jq_filter | select(.isFork==false)"
-        jq_filter="$jq_filter | .nameWithOwner"
-
-        local fork_note="(forks excluded)"
-        [[ "$INCLUDE_FORKS" == "1" ]] && fork_note="(forks included)"
-        echo "${C_BOLD}Source:${C_RESET} gh repo list $GH_USER --visibility $VISIBILITY $fork_note (wiki enabled)" >&2
-        gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-            --json nameWithOwner,hasWikiEnabled,isFork --jq "$jq_filter" \
-            | sed 's#^#https://github.com/#'
-        return
-    fi
-
-    if [[ ! -t 0 ]]; then
-        echo "${C_BOLD}Source:${C_RESET} stdin" >&2
-        cat
-        return
-    fi
-
-    show_usage
-    exit 1
-}
-
-[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN — nothing will be changed ==${C_RESET}"
-[[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode — will disable wiki even if it has pages ==${C_RESET}"
-
-input_source \
+input_source "hasWikiEnabled" ".hasWikiEnabled==true" "(wiki enabled)" \
     | grep -vE '^[[:space:]]*(#|$)' \
     | grep -Eo 'https?://[^ ]+' \
     | while read -r url; do
