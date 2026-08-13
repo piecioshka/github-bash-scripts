@@ -149,7 +149,7 @@ if [[ -n "$results" ]]; then
     while IFS=$'\t' read -r slug vis is_fork is_archived lic_key license_file; do
         [[ -z "$slug" ]] && continue
         lic_badge=""
-        [[ "$lic_key" != "-" && -n "$lic_key" ]] && lic_badge=" ${C_CYAN}[📄 $lic_key]${C_RESET}"
+        [[ "$lic_key" != "-" && -n "$lic_key" ]] && lic_badge=" ${C_CYAN}[$lic_key]${C_RESET}"
         badges=""
         [[ "$vis" == "private" ]] && badges="$badges ${C_YELLOW}[🔐 private]${C_RESET}"
         [[ "$is_fork" == "true" ]] && badges="$badges ${C_BLUE}[🍴 fork]${C_RESET}"
