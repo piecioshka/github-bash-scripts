@@ -123,13 +123,14 @@ github-find-repos-with-wikis -u piecioshka -o                  # also save repo 
 github-find-repos-with-wikis -u piecioshka -o wikis.txt        # also save repo URLs to a specific file
 CONCURRENCY=20 github-find-repos-with-wikis -u piecioshka
 
-# List repos whose Projects feature is enabled but have no linked projects (empty)
-github-find-repos-with-unused-projects-feature -u piecioshka
-github-find-repos-with-unused-projects-feature -u piecioshka -v public
-github-find-repos-with-unused-projects-feature -u piecioshka -F
-github-find-repos-with-unused-projects-feature -u piecioshka -o                  # also save repo URLs to auto-named file
-github-find-repos-with-unused-projects-feature -u piecioshka -o empty-proj.txt   # also save repo URLs to a specific file
-CONCURRENCY=20 github-find-repos-with-unused-projects-feature -u piecioshka
+# List repos with the Projects feature enabled, together with linked-project counts
+github-find-repos-with-projects-feature -u piecioshka
+github-find-repos-with-projects-feature -u piecioshka -v public
+github-find-repos-with-projects-feature -u piecioshka -F
+github-find-repos-with-projects-feature -u piecioshka -e                  # only repos with no linked projects (unused)
+github-find-repos-with-projects-feature -u piecioshka -o                  # also save repo URLs to auto-named file
+github-find-repos-with-projects-feature -u piecioshka -o projects.txt     # also save repo URLs to a specific file
+CONCURRENCY=20 github-find-repos-with-projects-feature -u piecioshka
 
 # List repos that have no description set
 github-find-repos-without-description -u piecioshka

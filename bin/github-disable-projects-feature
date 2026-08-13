@@ -18,7 +18,7 @@
 # Linked-project count comes from GraphQL `projectsV2`; classic boards are not
 # counted.
 #
-# Pairs with github-find-repos-with-unused-projects-feature: `github-find-repos-with-unused-projects-feature -u me -o p.txt`
+# Pairs with github-find-repos-with-projects-feature: `github-find-repos-with-projects-feature -u me -e -o p.txt`
 # then `github-disable-projects-feature -f p.txt`.
 #
 # Accepts repo URLs (one per line, lines starting with # are ignored):
