@@ -6,6 +6,7 @@
 #   github-clear-homepages -u <username> -F                 # include forks
 #   github-clear-homepages -f links.txt                     # repos from a file
 #   echo "https://github.com/o/r" | github-clear-homepages  # repos from stdin
+#   github-clear-homepages owner/repo another/repo        # positional slugs
 #   github-clear-homepages -u <username> --force            # clear ANY homepage (not only *.github.io)
 #   DRY_RUN=1 github-clear-homepages -u <username>          # show what would be done
 #   github-clear-homepages --help                           # show help
@@ -25,6 +26,7 @@ set -u
 
 DRY_RUN="${DRY_RUN:-0}"
 INPUT_FILE=""
+POSITIONAL=()
 GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
@@ -56,8 +58,10 @@ while [[ $# -gt 0 ]]; do
             FORCE=1; shift ;;
         -h|--help)
             show_usage; exit 0 ;;
+        -*)
+            echo "Unknown flag: $1 (use -f <file>, -u <user>, --force or --help)" >&2; exit 1 ;;
         *)
-            echo "Unknown argument: $1 (use -f <file>, -u <user>, --force or --help)" >&2; exit 1 ;;
+            POSITIONAL+=("$1"); shift ;;
     esac
 done
 
@@ -160,6 +164,19 @@ clear_homepage() {
 }
 
 input_source() {
+    if [[ ${#POSITIONAL[@]} -gt 0 ]]; then
+        echo "${C_BOLD}Source:${C_RESET} positional arguments" >&2
+        local arg
+        for arg in "${POSITIONAL[@]}"; do
+            if [[ "$arg" == http*://* ]]; then
+                echo "$arg"
+            else
+                echo "https://github.com/${arg%.git}"
+            fi
+        done
+        return
+    fi
+
     if [[ -n "$INPUT_FILE" ]]; then
         if [[ ! -f "$INPUT_FILE" ]]; then
             echo "ERROR: file does not exist: $INPUT_FILE" >&2

@@ -9,6 +9,7 @@ All scripts live in [`bin/`](bin/). Most share the same conventions:
 - `-u <username>` — scope to a user's repos (via `gh repo list`)
 - `-f <file>` — input file with URLs (one per line; lines starting with `#` are ignored)
 - stdin — pipe URLs in
+- positional slugs — scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wikis owner/repo`)
 - `-v public|private|all` — visibility filter (where applicable)
 - `-F/--include-forks` — include forks (default: excluded)
 - `DRY_RUN=1` — preview without making changes (for destructive actions)
@@ -165,6 +166,7 @@ All destructive operations support `DRY_RUN=1` to preview changes.
 # Enable GitHub Pages for each repo (source: main / root by default)
 github-enable-pages -f repos.txt
 cat repos.txt | github-enable-pages
+github-enable-pages owner/repo another/repo              # positional slugs
 github-enable-pages -f repos.txt -b gh-pages             # custom source branch
 github-enable-pages -f repos.txt -b main -p /docs        # custom source path
 
@@ -172,6 +174,7 @@ github-enable-pages -f repos.txt -b main -p /docs        # custom source path
 DRY_RUN=1 github-disable-pages -f repos.txt
 github-disable-pages -f repos.txt
 cat repos.txt | github-disable-pages
+github-disable-pages owner/repo another/repo             # positional slugs
 
 # Clear the repo website/homepage URL
 github-clear-homepages -u piecioshka                      # only clears *.github.io
@@ -181,6 +184,7 @@ github-clear-homepages -u piecioshka -F
 github-clear-homepages -u piecioshka --force              # clears ANY homepage
 github-clear-homepages -f repos.txt
 cat repos.txt | github-clear-homepages
+github-clear-homepages owner/repo another/repo            # positional slugs
 DRY_RUN=1 github-clear-homepages -u piecioshka
 
 # Disable the wiki feature on repos whose wiki is empty (no pages lost)
@@ -189,12 +193,14 @@ github-disable-wikis -u piecioshka                        # only disables EMPTY 
 github-disable-wikis -u piecioshka --force                # disable wiki even if it has pages
 github-disable-wikis -f empty-wikis.txt
 cat empty-wikis.txt | github-disable-wikis
+github-disable-wikis owner/repo another/repo              # positional slugs
 
 # Disable the Projects feature on repos with no linked projects
 DRY_RUN=1 github-disable-projects-feature -u piecioshka
 github-disable-projects-feature -u piecioshka                    # only disables EMPTY projects
 github-disable-projects-feature -u piecioshka --force            # disable even if projects exist
 github-disable-projects-feature -f empty-proj.txt
+github-disable-projects-feature owner/repo another/repo   # positional slugs
 ```
 
 ### Chained workflows

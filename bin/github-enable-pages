@@ -2,6 +2,7 @@
 # Usage:
 #   github-enable-pages -f links.txt                     # repos from a file
 #   echo "https://github.com/o/r" | github-enable-pages  # repos from stdin
+#   github-enable-pages owner/repo another/repo        # positional slugs
 #   github-enable-pages -f links.txt -b gh-pages         # custom source branch (default: main)
 #   github-enable-pages -f links.txt -b main -p /docs    # custom source path (default: /)
 #   DRY_RUN=1 github-enable-pages -f links.txt           # show what would be done
@@ -22,6 +23,7 @@ DRY_RUN="${DRY_RUN:-0}"
 BRANCH="main"
 PATH_IN_REPO="/"
 INPUT_FILE=""
+POSITIONAL=()
 
 show_usage() {
     sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
@@ -45,8 +47,10 @@ while [[ $# -gt 0 ]]; do
             PATH_IN_REPO="$2"; shift 2 ;;
         -h|--help)
             show_usage; exit 0 ;;
+        -*)
+            echo "Unknown flag: $1 (use -f <file> or --help)" >&2; exit 1 ;;
         *)
-            echo "Unknown argument: $1 (use -f <file> or --help)" >&2; exit 1 ;;
+            POSITIONAL+=("$1"); shift ;;
     esac
 done
 
@@ -132,6 +136,19 @@ enable_pages() {
 }
 
 input_source() {
+    if [[ ${#POSITIONAL[@]} -gt 0 ]]; then
+        echo "${C_BOLD}Source:${C_RESET} positional arguments" >&2
+        local arg
+        for arg in "${POSITIONAL[@]}"; do
+            if [[ "$arg" == http*://* ]]; then
+                echo "$arg"
+            else
+                echo "https://github.com/${arg%.git}"
+            fi
+        done
+        return
+    fi
+
     if [[ -n "$INPUT_FILE" ]]; then
         if [[ ! -f "$INPUT_FILE" ]]; then
             echo "ERROR: file does not exist: $INPUT_FILE" >&2
