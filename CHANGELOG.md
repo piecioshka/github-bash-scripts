@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Fixed `github-find-repos-with-empty-wikis` reporting repositories whose wiki feature is off: the GraphQL `hasWikiEnabled` flag used for pre-filtering can disagree with the repo settings, so each candidate is now re-checked against the REST `has_wiki` field before its wiki content is inspected.
 - 2026-08-13 — Changed `github-find-repos-with-branch` to require `-b <branch>`; the implicit `gh-pages` default is gone.
 - 2026-08-13 — Changed `github-find-repos-with-broken-homepages` to print only the `BROKEN` rows by default; the new `-a` / `--all` flag restores the full listing (replaces `-b` / `--broken-only`).
 - 2026-08-13 — Renamed all sixteen scripts to verb-first names so each name reads as the question it answers — `github-find-*` for filtering (e.g. `github-find-repos-without-description`, `github-find-repos-with-broken-homepages`), `github-list-*` for reports, and action verbs for the rest (`github-enable-pages`, `github-disable-wikis`, `github-clear-homepages`, `github-scan-secrets`, `github-find-user-repos`).

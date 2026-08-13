@@ -135,7 +135,16 @@ echo
 # and skip, rather than misreport it as empty. Auth via the GH_WIKI_TOKEN helper.
 wiki_is_empty() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
-    local out rc
+    local out rc has_wiki
+    # The GraphQL hasWikiEnabled flag used for the pre-filter can disagree with
+    # the repo settings (it reports the stored flag even when the wiki feature
+    # is not actually available, e.g. private repos on a free plan). Trust the
+    # REST has_wiki field as the source of truth and skip repos without a wiki.
+    if ! has_wiki=$(gh api "repos/$slug" --jq '.has_wiki' 2>/dev/null); then
+        printf "WARN  %s — wiki check inconclusive: cannot read repo via REST\n" "$slug" >&2
+        return 0
+    fi
+    [[ "$has_wiki" == "true" ]] || return 0
     # shellcheck disable=SC2016  # $1/$GH_WIKI_TOKEN must stay literal — git expands them when it runs the helper
     out=$(git -c credential.helper='' \
         -c credential.helper='!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GH_WIKI_TOKEN"; }; f' \
