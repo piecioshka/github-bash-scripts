@@ -75,7 +75,7 @@ CONCURRENCY=20 TIMEOUT=30 github-find-repos-with-homepage -u piecioshka
 github-find-repos-with-only-readme -u piecioshka
 github-find-repos-with-only-readme -u piecioshka -v public
 github-find-repos-with-only-readme -u piecioshka -F
-github-find-repos-with-only-readme -u piecioshka -p                # also check GitHub Pages status (green URL / red "pages off")
+github-find-repos-with-only-readme -u piecioshka -P                # also check GitHub Pages status (green URL / red "pages off")
 github-find-repos-with-only-readme -u piecioshka -o                # also save repo URLs to auto-named file
 github-find-repos-with-only-readme -u piecioshka -o readme.txt     # also save repo URLs to a specific file
 CONCURRENCY=20 github-find-repos-with-only-readme -u piecioshka
@@ -92,7 +92,7 @@ CONCURRENCY=20 github-find-repos-with-branch -u piecioshka -b main
 
 # List repos that contain a LICENSE file (LICENSE/LICENCE/COPYING/UNLICENSE)
 github-find-repos-with-license -u piecioshka
-github-find-repos-with-license -u piecioshka -n                # only Node.js projects (have package.json)
+github-find-repos-with-license -u piecioshka -N                # only Node.js projects (have package.json)
 github-find-repos-with-license -u piecioshka -v public
 github-find-repos-with-license -u piecioshka -F
 github-find-repos-with-license -u piecioshka -o               # also save repo URLs to auto-named file

@@ -4,14 +4,14 @@
 #   github-find-repos-with-only-readme -u <username> -v public         # only public
 #   github-find-repos-with-only-readme -u <username> -v private        # only private
 #   github-find-repos-with-only-readme -u <username> -F                # include forks
-#   github-find-repos-with-only-readme -u <username> -p                # also check GitHub Pages status per repo
+#   github-find-repos-with-only-readme -u <username> -P                # also check GitHub Pages status per repo
 #   github-find-repos-with-only-readme -u <username> -o                # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-only-readme -u <username> -o out.txt        # also save URLs to a specific file
 #   github-find-repos-with-only-readme --help                          # show help
 #
 # Lists repositories whose HEAD tree contains exactly a single file: README.md.
 # Useful for finding placeholder or abandoned repos.
-# With -p / --check-pages each found repo is also checked for GitHub Pages
+# With -P / --check-pages each found repo is also checked for GitHub Pages
 # (via `gh api repos/<slug>/pages`): enabled shows the Pages URL in green,
 # disabled shows a red "pages off".
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs -
@@ -45,7 +45,7 @@ while [[ $# -gt 0 ]]; do
             VISIBILITY="$2"; shift 2 ;;
         -F|--include-forks)
             INCLUDE_FORKS=1; shift ;;
-        -p|--check-pages)
+        -P|--check-pages)
             CHECK_PAGES=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then

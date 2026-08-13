@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage:
 #   github-find-repos-with-license -u <username>                   # all repos with a LICENSE file (forks excluded)
-#   github-find-repos-with-license -u <username> -n                # only Node.js projects (have package.json)
+#   github-find-repos-with-license -u <username> -N                # only Node.js projects (have package.json)
 #   github-find-repos-with-license -u <username> -v public         # only public
 #   github-find-repos-with-license -u <username> -v private        # only private
 #   github-find-repos-with-license -u <username> -F                # include forks
@@ -12,7 +12,7 @@
 # Lists repositories whose HEAD root tree contains a LICENSE-like file
 # (LICENSE, LICENCE, COPYING, UNLICENSE - optionally with an extension or a
 # -SUFFIX, e.g. LICENSE.md, LICENSE.txt or LICENSE-MIT / LICENSE-APACHE).
-# With -n / --node-only, also requires a root package.json (Node.js projects).
+# With -N / --node-only, also requires a root package.json (Node.js projects).
 # Handy for spotting repos that carry a license file you may want to drop.
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs -
 # bare -o generates <PWD>/licenses-<username>_<timestamp>.txt, -o <path> uses
@@ -45,7 +45,7 @@ while [[ $# -gt 0 ]]; do
             VISIBILITY="$2"; shift 2 ;;
         -F|--include-forks)
             INCLUDE_FORKS=1; shift ;;
-        -n|--node-only)
+        -N|--node-only)
             NODE_ONLY=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
