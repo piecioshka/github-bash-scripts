@@ -16,7 +16,7 @@
 # such repo, so `git ls-remote` returns no refs. Page counts come from a
 # blobless, no-checkout clone of the wiki repo (trees only, no file contents).
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/wikis-<user>_<timestamp>.txt (wiki-empty-<user>_… with
+# bare -o generates <PWD>/wikis-<user>_<timestamp>.txt (wikis-unused-<user>_… with
 # --only-unused), -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated), git
@@ -95,7 +95,7 @@ export GH_WIKI_TOKEN
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
     if [[ "$ONLY_UNUSED" == "1" ]]; then
-        OUTPUT_FILE="$PWD/wiki-empty-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/wikis-unused-$GH_USER""_$TIMESTAMP.txt"
     else
         OUTPUT_FILE="$PWD/wikis-$GH_USER""_$TIMESTAMP.txt"
     fi

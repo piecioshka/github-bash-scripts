@@ -15,7 +15,7 @@
 # With -n / --node-only, also requires a root package.json (Node.js projects).
 # Handy for spotting repos that carry a license file you may want to drop.
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
-# bare -o generates <PWD>/with-license-<user>_<timestamp>.txt, -o <path> uses
+# bare -o generates <PWD>/licenses-<user>_<timestamp>.txt, -o <path> uses
 # that path.
 #
 # Requires: gh CLI (authenticated)
@@ -81,7 +81,7 @@ esac
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    OUTPUT_FILE="$PWD/with-license-$GH_USER""_$TIMESTAMP.txt"
+    OUTPUT_FILE="$PWD/licenses-$GH_USER""_$TIMESTAMP.txt"
 fi
 
 # colors (tty only)

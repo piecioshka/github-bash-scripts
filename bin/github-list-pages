@@ -12,7 +12,7 @@
 # Lists repositories that have GitHub Pages enabled. Default mode: Pages URLs
 # (owner.github.io/repo). With -r / --repo-url: repository URLs.
 # By default prints to stdout only. Pass -o to also save a file — bare -o
-# generates <PWD>/<mode>-links-<user>_<timestamp>.txt, -o <path> uses that path.
+# generates <PWD>/pages[-repos]-<user>_<timestamp>.txt, -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated)
 
@@ -77,7 +77,11 @@ esac
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    OUTPUT_FILE="$PWD/${OUTPUT_MODE}-links-$GH_USER""_$TIMESTAMP.txt"
+    if [[ "$OUTPUT_MODE" == "repo" ]]; then
+        OUTPUT_FILE="$PWD/pages-repos-$GH_USER""_$TIMESTAMP.txt"
+    else
+        OUTPUT_FILE="$PWD/pages-$GH_USER""_$TIMESTAMP.txt"
+    fi
 fi
 
 # colors (tty only)

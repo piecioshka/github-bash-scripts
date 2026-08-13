@@ -15,7 +15,7 @@
 # Default output: branch URLs (github.com/owner/repo/tree/<branch>).
 # With -r / --repo-url: repository URLs.
 # By default prints to stdout only. Pass -o to also save a file — bare -o
-# generates <PWD>/<mode>-<branch>-branch-<user>_<timestamp>.txt,
+# generates <PWD>/branches-<branch>[-repos]-<user>_<timestamp>.txt,
 # -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated)
@@ -94,7 +94,11 @@ BRANCH_SAFE="${BRANCH//\//-}"
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    OUTPUT_FILE="$PWD/${OUTPUT_MODE}-${BRANCH_SAFE}-branch-$GH_USER""_$TIMESTAMP.txt"
+    if [[ "$OUTPUT_MODE" == "repo" ]]; then
+        OUTPUT_FILE="$PWD/branches-${BRANCH_SAFE}-repos-$GH_USER""_$TIMESTAMP.txt"
+    else
+        OUTPUT_FILE="$PWD/branches-${BRANCH_SAFE}-$GH_USER""_$TIMESTAMP.txt"
+    fi
 fi
 
 # colors (tty only)
