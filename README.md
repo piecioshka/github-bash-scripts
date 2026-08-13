@@ -224,7 +224,9 @@ github-disable-projects-feature owner/repo another/repo   # positional slugs
 
 ```bash
 # 1) Find repos whose homepage is broken, then clear those homepages
-github-find-repos-with-homepage -u piecioshka -r -o broken.txt
+#    (-e is essential: without it broken.txt would list EVERY repo with
+#    a homepage and the next line would clear all of them)
+github-find-repos-with-homepage -u piecioshka -e -r -o broken.txt
 github-clear-homepage -f broken.txt --force
 
 # 2) Find repos matching a query, then scan them for secrets
