@@ -105,8 +105,15 @@ echo
 check_license() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4" lic_key="$5"
     local tree license_file
-    tree=$(gh api "repos/$slug/git/trees/HEAD" \
-        --jq '.tree[] | select(.type=="blob") | .path' 2>/dev/null)
+    # HTTP 404/409 = no HEAD tree (empty repo - a legitimate negative). Any
+    # other failure (rate limit, network, auth) is inconclusive - surface it
+    # on stderr instead of silently undercounting.
+    if ! tree=$(gh api "repos/$slug/git/trees/HEAD" \
+        --jq '.tree[] | select(.type=="blob") | .path' 2>&1); then
+        grep -qE 'HTTP (404|409)' <<< "$tree" \
+            || printf "WARN  %s - license check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$tree")" >&2
+        return 0
+    fi
     [[ -z "$tree" ]] && return
     license_file=$(printf '%s\n' "$tree" \
         | grep -iE '^(LICEN[CS]E|COPYING|UNLICENSE)([-.].*)?$' | head -n1)

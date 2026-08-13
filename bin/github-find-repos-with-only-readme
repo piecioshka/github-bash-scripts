@@ -104,12 +104,13 @@ echo
 check_readme_only() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
     local files pages="-" pages_url="-"
-    # Rate-limited calls must not be silently counted as "not README-only" -
-    # a 403 here means the whole run is undercounting, so surface it.
+    # HTTP 404/409 = no HEAD tree (empty repo - a legitimate negative). Any
+    # other failure (rate limit, network, auth) must not be silently counted
+    # as "not README-only" - it means the run is undercounting, so surface it.
     if ! files=$(gh api "repos/$slug/git/trees/HEAD?recursive=1" \
         --jq '[.tree[] | select(.type=="blob") | .path]' 2>&1); then
-        grep -qi 'rate limit' <<< "$files" \
-            && printf "WARN  %s - skipped: GitHub API rate limit hit, result is incomplete\n" "$slug" >&2
+        grep -qE 'HTTP (404|409)' <<< "$files" \
+            || printf "WARN  %s - README check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$files")" >&2
         return 0
     fi
     [[ "$files" == '["README.md"]' ]] || return 0

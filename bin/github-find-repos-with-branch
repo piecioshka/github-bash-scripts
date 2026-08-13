@@ -123,8 +123,15 @@ echo
 check_branch() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
     local branch_name target_branch="$TARGET_BRANCH"
-    if branch_name=$(gh api "repos/$slug/branches/$target_branch" --jq '.name' 2>/dev/null) \
-        && [[ "$branch_name" == "$target_branch" ]]; then
+    # HTTP 404 = branch absent (a legitimate negative). Any other failure
+    # (rate limit, network, auth) is inconclusive - surface it on stderr
+    # instead of silently undercounting.
+    if ! branch_name=$(gh api "repos/$slug/branches/$target_branch" --jq '.name' 2>&1); then
+        grep -q 'HTTP 404' <<< "$branch_name" \
+            || printf "WARN  %s - branch check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$branch_name")" >&2
+        return 0
+    fi
+    if [[ "$branch_name" == "$target_branch" ]]; then
         printf "%s\t%s\t%s\t%s\n" "$slug" "$vis" "$is_fork" "$is_archived"
     fi
 }

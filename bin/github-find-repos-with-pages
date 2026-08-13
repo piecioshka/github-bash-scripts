@@ -105,14 +105,20 @@ echo
 check_pages() {
     local slug="$1" vis="$2" is_fork="$3" is_archived="$4"
     local line html_url build_type branch path
-    if line=$(gh api "repos/$slug/pages" \
-        --jq '[.html_url // "", (.build_type // "legacy"), (.source.branch // ""), (.source.path // "")] | @tsv' 2>/dev/null) \
-        && [[ -n "$line" ]]; then
-        IFS=$'\t' read -r html_url build_type branch path <<< "$line"
-        if [[ -n "$html_url" && "$html_url" != "null" ]]; then
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-                "$slug" "$vis" "$is_fork" "$is_archived" "$html_url" "$build_type" "$branch" "$path"
-        fi
+    # HTTP 404 = Pages disabled (a legitimate negative). Any other failure
+    # (rate limit, network, auth) is inconclusive - surface it on stderr
+    # instead of silently undercounting.
+    if ! line=$(gh api "repos/$slug/pages" \
+        --jq '[.html_url // "", (.build_type // "legacy"), (.source.branch // ""), (.source.path // "")] | @tsv' 2>&1); then
+        grep -q 'HTTP 404' <<< "$line" \
+            || printf "WARN  %s - Pages check inconclusive: %s\n" "$slug" "$(head -n1 <<< "$line")" >&2
+        return 0
+    fi
+    [[ -z "$line" ]] && return 0
+    IFS=$'\t' read -r html_url build_type branch path <<< "$line"
+    if [[ -n "$html_url" && "$html_url" != "null" ]]; then
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$slug" "$vis" "$is_fork" "$is_archived" "$html_url" "$build_type" "$branch" "$path"
     fi
 }
 export -f check_pages
