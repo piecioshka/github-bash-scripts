@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # Usage:
-#   github-find-repos-with-broken-homepages -u <username>              # all repos (forks excluded)
-#   github-find-repos-with-broken-homepages -u <username> -v public    # only public
-#   github-find-repos-with-broken-homepages -u <username> -v private   # only private
-#   github-find-repos-with-broken-homepages -u <username> -F           # include forks
-#   github-find-repos-with-broken-homepages -u <username> -r           # output repo URLs (github.com/owner/repo)
-#   github-find-repos-with-broken-homepages -u <username> -a           # show all rows, including OK homepages
-#   github-find-repos-with-broken-homepages -u <username> -o           # also save URLs to auto-named file in $PWD
-#   github-find-repos-with-broken-homepages -u <username> -o out.txt   # also save URLs to a specific file
-#   github-find-repos-with-broken-homepages --help                     # show help
+#   github-find-repos-with-homepages -u <username>              # all repos (forks excluded)
+#   github-find-repos-with-homepages -u <username> -v public    # only public
+#   github-find-repos-with-homepages -u <username> -v private   # only private
+#   github-find-repos-with-homepages -u <username> -F           # include forks
+#   github-find-repos-with-homepages -u <username> -e           # only broken homepages (non-2xx/3xx)
+#   github-find-repos-with-homepages -u <username> -r           # output repo URLs (github.com/owner/repo)
+#   github-find-repos-with-homepages -u <username> -o           # also save URLs to auto-named file in $PWD
+#   github-find-repos-with-homepages -u <username> -o out.txt   # also save URLs to a specific file
+#   github-find-repos-with-homepages --help                     # show help
 #
-# Lists repositories whose homepage URL is broken (HTTP status outside 2xx/3xx).
-# By default only BROKEN rows are printed; pass -a / --all to also show the OK
-# ones. Default mode: broken homepage URLs. With -r / --repo-url: repository
-# URLs instead (chainable with github-clear-homepages).
+# Lists repositories with a homepage set and checks each URL over HTTP:
+# OK for 2xx/3xx, BROKEN otherwise. Pass -e / --only-broken to keep only the
+# BROKEN rows (with -r that output chains into github-clear-homepages).
+# Default mode: homepage URLs. With -r / --repo-url: repository URLs.
 # By default prints to stdout only. Pass -o to also save a file — bare -o
-# generates <PWD>/broken-homepages-<user>_<timestamp>.txt, -o <path> uses that path.
+# generates <PWD>/homepages-checked[-repos]-<user>_<timestamp>.txt
+# (homepages-broken[-repos]-<user>_… with --only-broken), -o <path> uses that path.
 #
 # Env:
 #   CONCURRENCY=10   parallelism for URL checks
@@ -28,7 +29,7 @@ set -u
 GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
-BROKEN_ONLY=1
+BROKEN_ONLY=0
 OUTPUT_FILE=""
 OUTPUT_MODE="homepage"    # homepage | repo
 CONCURRENCY="${CONCURRENCY:-10}"
@@ -55,8 +56,8 @@ while [[ $# -gt 0 ]]; do
             INCLUDE_FORKS=1; shift ;;
         -r|--repo-url)
             OUTPUT_MODE="repo"; shift ;;
-        -a|--all)
-            BROKEN_ONLY=0; shift ;;
+        -e|--only-broken)
+            BROKEN_ONLY=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                 OUTPUT_FILE="__AUTO__"; shift 1
@@ -88,10 +89,12 @@ esac
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+    PREFIX="homepages-checked"
+    [[ "$BROKEN_ONLY" == "1" ]] && PREFIX="homepages-broken"
     if [[ "$OUTPUT_MODE" == "homepage" ]]; then
-        OUTPUT_FILE="$PWD/broken-homepages-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/$PREFIX-$GH_USER""_$TIMESTAMP.txt"
     else
-        OUTPUT_FILE="$PWD/broken-homepages-repos-$GH_USER""_$TIMESTAMP.txt"
+        OUTPUT_FILE="$PWD/$PREFIX-repos-$GH_USER""_$TIMESTAMP.txt"
     fi
 fi
 
@@ -153,7 +156,7 @@ check_entry() {
     local code
     code=$(curl -s -o /dev/null -L -w "%{http_code}" \
         --max-time "$TIMEOUT" \
-        -A "Mozilla/5.0 (github-find-repos-with-broken-homepages)" \
+        -A "Mozilla/5.0 (github-find-repos-with-homepages)" \
         "$url" 2>/dev/null)
     code="${code:-000}"
 
@@ -183,13 +186,11 @@ echo "$display" | sort | while IFS=$'\t' read -r status code slug url vis is_for
     printf "%s  %5s  %-50s  %s%s\n" "$(paint_status "$status")" "$code" "$slug" "$url" "$badges"
 done
 
-# 4. Build broken URL list (slug = col 3, homepage = col 4)
-broken=$(echo "$results" | awk -F'\t' '$1=="BROKEN"')
-
+# 4. Build URL list from the displayed rows (slug = col 3, homepage = col 4)
 if [[ "$OUTPUT_MODE" == "repo" ]]; then
-    urls=$(echo "$broken" | awk -F'\t' 'NF>=3 { print "https://github.com/" $3 }' | sort -u)
+    urls=$(echo "$display" | awk -F'\t' 'NF>=3 { print "https://github.com/" $3 }' | sort -u)
 else
-    urls=$(echo "$broken" | awk -F'\t' 'NF>=4 { print $4 }' | sort -u)
+    urls=$(echo "$display" | awk -F'\t' 'NF>=4 { print $4 }' | sort -u)
 fi
 
 ok=$(echo "$results" | grep -c '^OK' || true)
@@ -200,5 +201,5 @@ echo "${C_BOLD}Summary:${C_RESET} OK=$ok  BROKEN=$fail  TOTAL=$total"
 
 if [[ -n "$OUTPUT_FILE" ]]; then
     echo "$urls" > "$OUTPUT_FILE"
-    echo "Written $(echo "$urls" | grep -c . || true) broken entries to: $OUTPUT_FILE"
+    echo "Written $(echo "$urls" | grep -c . || true) entries to: $OUTPUT_FILE"
 fi

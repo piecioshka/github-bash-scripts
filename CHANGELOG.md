@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Renamed `github-find-repos-with-broken-homepages` to `github-find-repos-with-homepages`: it now lists every repository with a homepage set together with the HTTP status of each URL, and the old behaviour (broken only) moved behind the new `-e` / `--only-broken` flag; `-o` saves the displayed set instead of always the broken one.
 - 2026-08-13 — Unified the CLI cosmetics across all scripts: option parsers now handle flags in the same order as the usage headers, and auto-named `-o` files follow one `<topic>[-<qualifier>][-repos]-<user>_<timestamp>.txt` scheme (`licenses-`, `branches-<branch>-`, `wikis-unused-`, `pages-` instead of `with-license-`, `<mode>-<branch>-branch-`, `wiki-empty-`, `<mode>-links-`).
 - 2026-08-13 — Changed `github-scan-secrets` to take the grep regex and the reports directory as flags — `-g` / `--grep-pattern` and `-d` / `--results-dir` — instead of the `GREP_PATTERN` and `RESULTS_DIR` environment variables; env now only carries execution config (`CONCURRENCY`).
 - 2026-08-13 — Changed `github-enable-pages` to take the Pages source as flags — `-b` / `--branch` and `-p` / `--path` — instead of the `BRANCH` and `PATH_IN_REPO` environment variables; env now only carries execution config (`DRY_RUN`).
