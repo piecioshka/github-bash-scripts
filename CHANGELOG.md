@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-13 — Renamed the `--only-empty` flag of `github-find-repos-with-wikis` to `--only-unused`, matching the flag of `github-find-repos-with-projects-feature` (`-e` stays the short form in both).
 - 2026-08-13 — Fixed `github-find-repos-with-only-readme` silently undercounting when the GitHub API rate limit kicks in mid-scan: rate-limited repos now produce a `WARN` on stderr instead of being treated as "not README-only".
 - 2026-08-13 — Added `-p` / `--check-pages` to `github-find-repos-with-only-readme`: each found repository is additionally checked for GitHub Pages — enabled shows the Pages URL in green, disabled a red `pages off`; the summary counts how many have Pages on.
 - 2026-08-13 — Renamed `github-find-repos-with-unused-projects-feature` to `github-find-repos-with-projects-feature`: it now lists every repository with the Projects feature enabled together with its linked-project count, and the old behaviour (unused only) moved behind the new `-e` / `--only-unused` flag.

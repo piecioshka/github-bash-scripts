@@ -10,14 +10,14 @@
 #   github-find-repos-with-wikis --help                          # show help
 #
 # Lists repositories whose wiki feature is ENABLED, with the number of wiki
-# pages each one has. Pass -e / --only-empty to keep only the wikis without a
+# pages each one has. Pass -e / --only-unused to keep only the wikis without a
 # single page (chain that output into github-disable-wikis -f <file>).
 # A wiki lives in a separate git repo at <repo>.wiki.git; an empty wiki has no
 # such repo, so `git ls-remote` returns no refs. Page counts come from a
 # blobless, no-checkout clone of the wiki repo (trees only, no file contents).
 # By default prints repo slugs to stdout. Pass -o to also save repo URLs —
 # bare -o generates <PWD>/wikis-<user>_<timestamp>.txt (wiki-empty-<user>_… with
-# --only-empty), -o <path> uses that path.
+# --only-unused), -o <path> uses that path.
 #
 # Requires: gh CLI (authenticated), git
 
@@ -26,7 +26,7 @@ set -u
 GH_USER=""
 VISIBILITY="all"
 INCLUDE_FORKS=0
-ONLY_EMPTY=0
+ONLY_UNUSED=0
 OUTPUT_FILE=""
 CONCURRENCY="${CONCURRENCY:-10}"
 
@@ -49,8 +49,8 @@ while [[ $# -gt 0 ]]; do
             VISIBILITY="$2"; shift 2 ;;
         -F|--include-forks)
             INCLUDE_FORKS=1; shift ;;
-        -e|--only-empty)
-            ONLY_EMPTY=1; shift ;;
+        -e|--only-unused)
+            ONLY_UNUSED=1; shift ;;
         -o|--output)
             if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                 OUTPUT_FILE="__AUTO__"; shift 1
@@ -94,7 +94,7 @@ export GH_WIKI_TOKEN
 
 if [[ "$OUTPUT_FILE" == "__AUTO__" ]]; then
     TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-    if [[ "$ONLY_EMPTY" == "1" ]]; then
+    if [[ "$ONLY_UNUSED" == "1" ]]; then
         OUTPUT_FILE="$PWD/wiki-empty-$GH_USER""_$TIMESTAMP.txt"
     else
         OUTPUT_FILE="$PWD/wikis-$GH_USER""_$TIMESTAMP.txt"
@@ -121,7 +121,7 @@ jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFor
 echo "${C_BOLD}User:${C_RESET}        $GH_USER"
 echo "${C_BOLD}Visibility:${C_RESET}  $VISIBILITY"
 echo "${C_BOLD}Forks:${C_RESET}       $([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)"
-echo "${C_BOLD}Filter:${C_RESET}      $([[ $ONLY_EMPTY == 1 ]] && echo "empty wikis only" || echo "all wikis")"
+echo "${C_BOLD}Filter:${C_RESET}      $([[ $ONLY_UNUSED == 1 ]] && echo "empty wikis only" || echo "all wikis")"
 echo "${C_BOLD}Concurrency:${C_RESET} $CONCURRENCY"
 [[ -n "$OUTPUT_FILE" ]] && echo "${C_BOLD}Output:${C_RESET}      $OUTPUT_FILE"
 echo
@@ -203,7 +203,7 @@ skipped=$(echo "$raw_results" | awk -F'\t' '$1=="SKIP"' | grep -c . || true)
 results=$(echo "$raw_results" | awk -F'\t' '$1!="SKIP"')
 
 display="$results"
-[[ "$ONLY_EMPTY" == "1" ]] && display=$(echo "$results" | awk -F'\t' '$2==0')
+[[ "$ONLY_UNUSED" == "1" ]] && display=$(echo "$results" | awk -F'\t' '$2==0')
 
 if [[ -n "$display" ]]; then
     while IFS=$'\t' read -r slug pages vis is_fork is_archived; do
@@ -229,7 +229,7 @@ urls=$(echo "$display" | cut -f1 | grep -v '^$' | sort -u \
 found=$(echo "$urls" | grep -c . || true)
 empty_count=$(echo "$results" | awk -F'\t' '$2==0' | grep -c . || true)
 echo
-if [[ "$ONLY_EMPTY" == "1" ]]; then
+if [[ "$ONLY_UNUSED" == "1" ]]; then
     echo "${C_BOLD}${C_DIM}Found $found/$total repos with an empty wiki.${C_RESET}"
 else
     echo "${C_BOLD}${C_DIM}Found $found/$total repos with the wiki feature enabled ($empty_count empty).${C_RESET}"
