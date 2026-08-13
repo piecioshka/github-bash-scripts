@@ -16,6 +16,8 @@
 #   - https://github.com/owner/repo
 #   - https://owner.github.io/repo/
 #
+# Exit codes: 0 = no failures, 1 = at least one repo ended in a FAIL row.
+#
 # Requires: gh CLI (authenticated) with admin access on the repos.
 
 set -u
@@ -84,15 +86,19 @@ enable_pages() {
         -f "source[path]=$PATH_IN_REPO" 2>&1); then
         print_row "OK" "$slug" "Pages enabled ($BRANCH$PATH_IN_REPO)"
     else
-        print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
     fi
 }
 
 [[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
 
-input_source \
+FAILED=0
+while read -r url; do
+    enable_pages "$url"
+done < <(input_source \
     | grep -vE '^[[:space:]]*(#|$)' \
-    | grep -Eo 'https?://[^ ]+' \
-    | while read -r url; do
-        enable_pages "$url"
-    done
+    | grep -Eo 'https?://[^ ]+')
+
+# Exit 1 when any repo ended in a FAIL row (useful for chaining and CI).
+[[ "$FAILED" -gt 0 ]] && exit 1
+exit 0

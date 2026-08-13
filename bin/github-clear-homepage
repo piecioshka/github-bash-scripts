@@ -21,6 +21,8 @@
 #   - https://github.com/owner/repo
 #   - https://owner.github.io/repo/
 #
+# Exit codes: 0 = no failures, 1 = at least one repo ended in a FAIL row.
+#
 # Requires: gh CLI (authenticated) with admin access on the repos.
 
 set -u
@@ -78,7 +80,7 @@ clear_homepage() {
 
     local homepage
     if ! homepage=$(gh api "repos/$slug" --jq '.homepage // ""' 2>/dev/null); then
-        print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
         return
     fi
 
@@ -104,16 +106,20 @@ clear_homepage() {
     if out=$(gh repo edit "$slug" --homepage "" 2>&1); then
         print_row "OK" "$slug" "cleared (was: $homepage)"
     else
-        print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
     fi
 }
 
 [[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
 [[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode - will clear ANY homepage ==${C_RESET}"
 
-input_source \
+FAILED=0
+while read -r url; do
+    clear_homepage "$url"
+done < <(input_source \
     | grep -vE '^[[:space:]]*(#|$)' \
-    | grep -Eo 'https?://[^ ]+' \
-    | while read -r url; do
-        clear_homepage "$url"
-    done
+    | grep -Eo 'https?://[^ ]+')
+
+# Exit 1 when any repo ended in a FAIL row (useful for chaining and CI).
+[[ "$FAILED" -gt 0 ]] && exit 1
+exit 0

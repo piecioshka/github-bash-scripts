@@ -26,6 +26,8 @@
 # Accepts repo URLs (one per line, lines starting with # are ignored):
 #   - https://github.com/owner/repo
 #
+# Exit codes: 0 = no failures, 1 = at least one repo ended in a FAIL row.
+#
 # Requires: gh CLI (authenticated, with read:project scope) and admin access.
 
 set -u
@@ -94,7 +96,7 @@ disable_projects() {
 
     local enabled
     if ! enabled=$(gh api "repos/$slug" --jq '.has_projects' 2>/dev/null); then
-        print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
         return
     fi
 
@@ -127,16 +129,20 @@ disable_projects() {
     if out=$(gh repo edit "$slug" --enable-projects=false 2>&1); then
         print_row "OK" "$slug" "Projects feature disabled"
     else
-        print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
     fi
 }
 
 [[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
 [[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode - will disable Projects even if projects exist ==${C_RESET}"
 
-input_source "hasProjectsEnabled" ".hasProjectsEnabled==true" "(projects enabled)" \
+FAILED=0
+while read -r url; do
+    disable_projects "$url"
+done < <(input_source "hasProjectsEnabled" ".hasProjectsEnabled==true" "(projects enabled)" \
     | grep -vE '^[[:space:]]*(#|$)' \
-    | grep -Eo 'https?://[^ ]+' \
-    | while read -r url; do
-        disable_projects "$url"
-    done
+    | grep -Eo 'https?://[^ ]+')
+
+# Exit 1 when any repo ended in a FAIL row (useful for chaining and CI).
+[[ "$FAILED" -gt 0 ]] && exit 1
+exit 0

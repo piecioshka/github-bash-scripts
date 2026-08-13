@@ -26,6 +26,8 @@
 #   CONCURRENCY=10   parallelism for URL checks
 #   TIMEOUT=15       per-request timeout in seconds
 #
+# Exit codes: 0 = all checked homepages OK (or -n), 1 = at least one BROKEN.
+#
 # Requires: gh CLI (authenticated), curl
 
 set -u
@@ -140,6 +142,7 @@ if [[ "$NO_CHECK" == "0" ]]; then
 fi
 
 # 2. Check each homepage URL in parallel
+# shellcheck disable=SC2329  # invoked indirectly via xargs bash -c
 check_entry() {
     local slug="$1" url="$2" vis="$3" is_fork="$4" is_archived="$5"
     local code
@@ -201,3 +204,7 @@ if [[ -n "$OUTPUT_FILE" ]]; then
     echo "$urls" > "$OUTPUT_FILE"
     echo "Written $(echo "$urls" | grep -c . || true) entries to: $OUTPUT_FILE"
 fi
+
+# Exit 1 when any homepage is BROKEN (linter-style, useful for chaining and CI).
+[[ "$NO_CHECK" == "0" && "${fail:-0}" -gt 0 ]] && exit 1
+exit 0
