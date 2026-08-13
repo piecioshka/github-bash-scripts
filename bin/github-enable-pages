@@ -6,6 +6,7 @@
 #   github-enable-pages -f links.txt -b gh-pages         # custom source branch (default: main)
 #   github-enable-pages -f links.txt -b main -p /docs    # custom source path (default: /)
 #   DRY_RUN=1 github-enable-pages -f links.txt           # show what would be done
+#   github-enable-pages --dry-run -f links.txt          # same as DRY_RUN=1
 #   github-enable-pages --help                           # show help
 #
 # Enables GitHub Pages for each repo on the list. Repos that already have
@@ -24,7 +25,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../shared/__shared.sh
 source "$script_dir/../shared/__shared.sh"
 
-DRY_RUN="${DRY_RUN:-0}"
+normalize_dry_run
 BRANCH="main"
 PATH_IN_REPO="/"
 
@@ -44,6 +45,8 @@ while [[ $# -gt 0 ]]; do
         -p|--path)
             [[ -z "${2:-}" ]] && { echo "ERROR: --path requires a path" >&2; exit 1; }
             PATH_IN_REPO="$2"; shift 2 ;;
+        --dry-run)
+            DRY_RUN=1; shift ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)

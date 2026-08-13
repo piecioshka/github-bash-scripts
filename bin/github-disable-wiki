@@ -9,6 +9,7 @@
 #   github-disable-wiki owner/repo another/repo          # positional slugs
 #   github-disable-wiki -u <username> --force            # disable wiki even if it has pages
 #   DRY_RUN=1 github-disable-wiki -u <username>          # show what would be done
+#   github-disable-wiki --dry-run -u <username>         # same as DRY_RUN=1
 #   github-disable-wiki --help                           # show help
 #
 # For each repo on the list: if the wiki feature is enabled but the wiki has no
@@ -32,7 +33,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../shared/__shared.sh
 source "$script_dir/../shared/__shared.sh"
 
-DRY_RUN="${DRY_RUN:-0}"
+normalize_dry_run
 
 if [[ $# -eq 0 && -t 0 ]]; then
     show_usage
@@ -54,6 +55,8 @@ while [[ $# -gt 0 ]]; do
             INPUT_FILE="$2"; shift 2 ;;
         --force)
             FORCE=1; shift ;;
+        --dry-run)
+            DRY_RUN=1; shift ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)
