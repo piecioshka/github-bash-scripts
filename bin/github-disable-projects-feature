@@ -109,7 +109,7 @@ disable_projects() {
         local count
         count=$(projects_count "$slug")
         if [[ -z "$count" ]]; then
-            print_row "SKIP" "$slug" "cannot read project count (read:project scope?)"
+            FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "projects check inconclusive (read:project scope?) - skipped for safety"
             return
         fi
         if [[ "$count" != "0" ]]; then
