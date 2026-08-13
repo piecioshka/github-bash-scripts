@@ -1,23 +1,44 @@
 # github-bash-scripts
 
+<!-- prettier-ignore-start -->
+
 [![github-ci](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/piecioshka/github-bash-scripts/actions/workflows/shellcheck.yml)
+
+<!-- prettier-ignore-end -->
 
 Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, wikis, projects, descriptions and secrets.
 
-All scripts live in [`bin/`](bin/). Most share the same conventions:
+## Repository layout
 
-- `-u <username>` — scope to a user's repos (via `gh repo list`)
-- `-f <file>` — input file with URLs (one per line; lines starting with `#` are ignored)
-- stdin — pipe URLs in
-- positional slugs — scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wiki owner/repo`)
-- `-v public|private|all` — visibility filter (where applicable)
-- `-F/--include-forks` — include forks (default: excluded)
-- `DRY_RUN=1` — preview without making changes (for destructive actions)
+- [`bin/`](bin/) - the executable scripts (add this directory to `PATH`)
+- [`shared/`](shared/) - libraries sourced by every script: [`__shared.sh`](shared/__shared.sh) (common helpers) and [`__colors.sh`](shared/__colors.sh) (TTY colors)
+
+The scripts locate `shared/` relative to their own path, so keep the clone intact - copying a single file out of `bin/` breaks it.
+
+## Shared conventions
+
+- `-u <username>` - scope to a user's repos (via `gh repo list`, up to 1000 repos)
+- `-f <file>` - input file with URLs (one per line; lines starting with `#` are ignored)
+- stdin - pipe URLs in
+- positional slugs - scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wiki owner/repo`)
+- input priority (scripts that consume a repo list): positional args → `-f <file>` → `-u <username>` → stdin; `github-scan-secrets` combines all given sources and deduplicates
+- `-v public|private|all` - visibility filter (default: `all`)
+- `-F/--include-forks` - include forks (default: excluded)
+- `-e` - narrow the output to the "problematic" subset: `--only-broken` (homepage) or `--only-unused` (wiki, projects)
+- `-r/--repo-url` - output repository URLs instead of the script's default URLs (Pages/branch/homepage)
+- `DRY_RUN=1` or `--dry-run` - preview without making changes (all write scripts). Any `DRY_RUN` value other than `0`, `false`, `no`, `off` or empty enables the dry run, so a typo can never run a destructive action for real
 - Colored columnar output when writing to a TTY
-- Repo state badges on TTY: `[🔐 private]` (yellow), `[🍴 fork]` (blue), `[📦 archived]` (brown) — shown only for non-default states, never written to `-o` output files
-- `list`/`search` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
+- Repo state badges on TTY: `[🔐 private]` (yellow), `[🍴 fork]` (blue), `[📦 archived]` (brown) - shown only for non-default states, never written to `-o` output files
+- `find` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
 
 Run any script with `--help` to see its full usage.
+
+### Exit codes
+
+- write scripts (`github-clear-homepage`, `github-enable-pages`, `github-delete-pages-branch`, `github-disable-wiki`, `github-disable-projects-feature`): `0` = no failures, `1` = at least one repo ended in a `FAIL` row
+- `github-find-repos-with-homepage`: `0` = all checked homepages OK (or `-n`), `1` = at least one `BROKEN`
+- `github-scan-secrets`: `0` = clean, `1` = at least one scan failed (e.g. clone error), `2` = scans succeeded but findings were reported
+- other `find` scripts: `0` (inconclusive per-repo checks are reported as `WARN` on stderr)
 
 ## Installation
 
@@ -40,7 +61,7 @@ gh auth login
 Install the required CLIs if you don't have them yet:
 
 ```bash
-brew install gh jq curl
+brew install bash gh jq curl
 brew install gitleaks   # only if you plan to use bin/github-scan-secrets
 ```
 
@@ -138,6 +159,8 @@ github-find-repos-without-description -u piecioshka -o no-desc.txt     # also sa
 
 ```bash
 # Scan git history of each repo with gitleaks + grep pattern (parallel)
+# Reports land in ./scan-results (chmod 700) and are redacted; exit code
+# 2 signals findings, 1 signals scan failures.
 github-scan-secrets -u piecioshka
 github-scan-secrets -u piecioshka -v public
 github-scan-secrets -u piecioshka -F
@@ -146,13 +169,13 @@ github-scan-secrets owner/repo another-owner/repo        # positional slugs
 echo "https://github.com/owner/repo" | github-scan-secrets
 
 github-scan-secrets -u piecioshka -g 'my_secret|prod_token'   # custom grep regex
-github-scan-secrets -u piecioshka -d /tmp/reports             # custom reports directory
+github-scan-secrets -u piecioshka -d /path/to/reports         # custom reports directory
 CONCURRENCY=8 github-scan-secrets -u piecioshka
 ```
 
 ### Modify (write operations)
 
-All destructive operations support `DRY_RUN=1` to preview changes.
+All write operations support `DRY_RUN=1` (or `--dry-run`) to preview changes.
 
 ```bash
 # Enable GitHub Pages for each repo (source: main / root by default)
@@ -162,11 +185,13 @@ github-enable-pages owner/repo another/repo              # positional slugs
 github-enable-pages -f repos.txt -b gh-pages             # custom source branch
 github-enable-pages -f repos.txt -b main -p /docs        # custom source path
 
-# Disable GitHub Pages (deletes the 'gh-pages' branch; refuses other branches)
+# Disable GitHub Pages by DELETING the 'gh-pages' branch (destructive!)
+# Refuses when the Pages source is another branch, is unknown, or the site
+# is built by GitHub Actions (build_type=workflow).
 DRY_RUN=1 github-delete-pages-branch -f repos.txt
 github-delete-pages-branch -f repos.txt
 cat repos.txt | github-delete-pages-branch
-github-delete-pages-branch owner/repo another/repo             # positional slugs
+github-delete-pages-branch owner/repo another/repo       # positional slugs
 
 # Clear the repo website/homepage URL
 github-clear-homepage -u piecioshka                      # only clears *.github.io
@@ -221,12 +246,12 @@ github-disable-wiki -f empty-wikis.txt
 
 ## Requirements
 
-- `bash` 4+ / macOS default bash works
-- [`gh`](https://cli.github.com/) — authenticated (`gh auth login`)
-- `jq` — only for `github-find-repos-by-metadata`
-- `curl`
-- `gitleaks` (`brew install gitleaks`) — only for `github-scan-secrets`
-- `git` — for `github-scan-secrets` and `github-find-repos-with-wiki` (wiki page counting)
+- `bash` 4.4+ - the macOS system bash (3.2) is NOT enough (the scripts use `mapfile` and empty-array expansion under `set -u`); install a current bash with `brew install bash`, the `#!/usr/bin/env bash` shebang picks it up from `PATH`
+- [`gh`](https://cli.github.com/) - authenticated (`gh auth login`); used by every script that talks to the GitHub API. `github-scan-secrets` needs it only for `-u` and for cloning private repos
+- `jq` - for `github-find-repos-by-metadata` and `github-scan-secrets`
+- `curl` - for `github-find-repos-with-homepage`
+- `gitleaks` (`brew install gitleaks`) - for `github-scan-secrets`
+- `git` - for `github-scan-secrets` and the wiki scripts (`github-find-repos-with-wiki`, `github-disable-wiki`)
 
 ## Contributing
 
