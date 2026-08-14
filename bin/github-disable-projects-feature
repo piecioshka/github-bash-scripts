@@ -10,6 +10,7 @@
 #   github-disable-projects-feature -u <username> --force            # disable even if projects exist
 #   DRY_RUN=1 github-disable-projects-feature -u <username>          # show what would be done
 #   github-disable-projects-feature --dry-run -u <username>         # same as DRY_RUN=1
+#   github-disable-projects-feature --version                        # show version
 #   github-disable-projects-feature --help                           # show help
 #
 # For each repo on the list: if the Projects feature is enabled but no Projects
@@ -63,6 +64,8 @@ while [[ $# -gt 0 ]]; do
             FORCE=1; shift ;;
         --dry-run)
             DRY_RUN=1; shift ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)

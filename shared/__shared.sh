@@ -30,6 +30,15 @@ show_usage() {
     sed -n '2,/^$/p' "$0" | sed -E 's/^# ?//'
 }
 
+# show_version - prints "<script name> <version>" and exits. The version lives
+# in the repo's VERSION file, so every script reports the same one.
+show_version() {
+    local version="unknown"
+    [[ -r "$__shared_dir/../VERSION" ]] && read -r version < "$__shared_dir/../VERSION"
+    echo "$(basename "$0") ${version:-unknown}"
+    exit 0
+}
+
 # require_cmd <command> [install hint] - exits when the command is missing.
 require_cmd() {
     command -v "$1" > /dev/null 2>&1 && return 0

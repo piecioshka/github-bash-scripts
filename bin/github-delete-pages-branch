@@ -5,6 +5,7 @@
 #   github-delete-pages-branch owner/repo another/repo         # positional slugs
 #   DRY_RUN=1 github-delete-pages-branch -f links.txt          # show what would be done
 #   github-delete-pages-branch --dry-run -f links.txt         # same as DRY_RUN=1
+#   github-delete-pages-branch --version                       # show version
 #   github-delete-pages-branch --help                          # show help
 #
 # Disables GitHub Pages for each repo on the list by DELETING the 'gh-pages'
@@ -52,6 +53,8 @@ while [[ $# -gt 0 ]]; do
             INPUT_FILE="$2"; shift 2 ;;
         --dry-run)
             DRY_RUN=1; shift ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)

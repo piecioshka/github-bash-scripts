@@ -7,6 +7,7 @@
 #   github-find-repos-with-only-readme -u <username> -P                # also check GitHub Pages status per repo
 #   github-find-repos-with-only-readme -u <username> -o                # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-only-readme -u <username> -o out.txt        # also save URLs to a specific file
+#   github-find-repos-with-only-readme --version                       # show version
 #   github-find-repos-with-only-readme --help                          # show help
 #
 # Lists repositories whose HEAD tree contains exactly a single file: README.md.
@@ -56,6 +57,8 @@ while [[ $# -gt 0 ]]; do
             else
                 OUTPUT_FILE="$2"; shift 2
             fi ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)

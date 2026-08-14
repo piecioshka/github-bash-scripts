@@ -7,6 +7,7 @@
 #   github-find-repos-with-wiki -u <username> -e                # only wikis with no pages (empty)
 #   github-find-repos-with-wiki -u <username> -o                # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-wiki -u <username> -o out.txt        # also save URLs to a specific file
+#   github-find-repos-with-wiki --version                       # show version
 #   github-find-repos-with-wiki --help                          # show help
 #
 # Lists repositories whose wiki feature is ENABLED, with the number of wiki
@@ -57,6 +58,8 @@ while [[ $# -gt 0 ]]; do
             else
                 OUTPUT_FILE="$2"; shift 2
             fi ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)

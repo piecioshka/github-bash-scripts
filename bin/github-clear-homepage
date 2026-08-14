@@ -10,6 +10,7 @@
 #   github-clear-homepage -u <username> --force            # clear ANY homepage (not only *.github.io)
 #   DRY_RUN=1 github-clear-homepage -u <username>          # show what would be done
 #   github-clear-homepage --dry-run -u <username>          # same as DRY_RUN=1
+#   github-clear-homepage --version                        # show version
 #   github-clear-homepage --help                           # show help
 #
 # For each repo on the list: if the repo's website/homepage URL points to a
@@ -58,6 +59,8 @@ while [[ $# -gt 0 ]]; do
             FORCE=1; shift ;;
         --dry-run)
             DRY_RUN=1; shift ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)

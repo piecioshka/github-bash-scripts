@@ -22,6 +22,7 @@ Collection of bash helpers for managing GitHub repositories in bulk: listing, au
 ## Repository layout
 
 - [`bin/`](bin/) - the executable scripts (add this directory to `PATH`)
+- [`VERSION`](VERSION) - the version reported by every script's `--version`
 - [`shared/`](shared/) - libraries sourced by every script: [`__shared.sh`](shared/__shared.sh) (common helpers) and [`__colors.sh`](shared/__colors.sh) (TTY colors)
 
 The scripts locate `shared/` relative to their own path, so keep the clone intact - copying a single file out of `bin/` breaks it.
@@ -251,7 +252,7 @@ github-disable-wiki -f empty-wikis.txt
 - Repo state badges on TTY: `[🔐 private]` (yellow), `[🍴 fork]` (blue), `[📦 archived]` (brown) - shown only for non-default states, never written to `-o` output files
 - `find` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
 
-Run any script with `--help` to see its full usage.
+Run any script with `--help` to see its full usage, or `--version` to print the version (shared across all scripts, from the [`VERSION`](VERSION) file).
 
 ### Exit codes
 

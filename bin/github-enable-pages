@@ -7,6 +7,7 @@
 #   github-enable-pages -f links.txt -b main -p /docs    # custom source path (default: /)
 #   DRY_RUN=1 github-enable-pages -f links.txt           # show what would be done
 #   github-enable-pages --dry-run -f links.txt          # same as DRY_RUN=1
+#   github-enable-pages --version                        # show version
 #   github-enable-pages --help                           # show help
 #
 # Enables GitHub Pages for each repo on the list. Repos that already have
@@ -51,6 +52,8 @@ while [[ $# -gt 0 ]]; do
             PATH_IN_REPO="$2"; shift 2 ;;
         --dry-run)
             DRY_RUN=1; shift ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)

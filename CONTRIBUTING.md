@@ -25,6 +25,7 @@ bundle.
 ## Repository layout
 
 - `bin/` - the executable scripts
+- `VERSION` - single source of truth for `--version` across all scripts
 - `shared/__shared.sh` - common helpers (usage extraction, arg validation via
   `require_value`/`validate_visibility`, row/status printing, badges, slug
   parsing and validation, input source resolution plus `normalize_input`, the
@@ -75,12 +76,14 @@ scripts.
     stdout only). With `<path>` writes to that exact path; bare `-o` (or
     followed by another flag) generates `<name>_YYYY-MM-DD_HH-mm-ss.txt`
     in `$PWD`
+  - `-V, --version` - print `<script name> <version>` from the repo's
+    `VERSION` file (via the shared `show_version`)
   - `-h, --help` - show usage
 - Short-flag registry (one meaning per letter across the whole repo):
   `-b` branch, `-c` case-sensitive, `-d` results dir, `-e` only-problematic,
   `-g` grep pattern, `-n` no-check, `-N` node-only, `-p` Pages source path,
-  `-P` check-pages, `-q` query, `-E` regex. Never reuse a taken letter for a
-  different meaning in another script
+  `-P` check-pages, `-q` query, `-E` regex, `-V` version. Never reuse a taken
+  letter for a different meaning in another script
 - Write scripts must support `DRY_RUN=1` and `--dry-run` to preview actions.
   Normalize the env var through the shared `normalize_dry_run` - every value
   except an explicit off (`0`, `false`, `no`, `off`, empty) enables dry-run

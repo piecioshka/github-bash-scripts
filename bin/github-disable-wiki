@@ -10,6 +10,7 @@
 #   github-disable-wiki -u <username> --force            # disable wiki even if it has pages
 #   DRY_RUN=1 github-disable-wiki -u <username>          # show what would be done
 #   github-disable-wiki --dry-run -u <username>         # same as DRY_RUN=1
+#   github-disable-wiki --version                        # show version
 #   github-disable-wiki --help                           # show help
 #
 # For each repo on the list: if the wiki feature is enabled but the wiki has no
@@ -61,6 +62,8 @@ while [[ $# -gt 0 ]]; do
             FORCE=1; shift ;;
         --dry-run)
             DRY_RUN=1; shift ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)

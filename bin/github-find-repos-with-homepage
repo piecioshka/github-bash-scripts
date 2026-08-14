@@ -9,6 +9,7 @@
 #   github-find-repos-with-homepage -u <username> -r           # output repo URLs (github.com/owner/repo)
 #   github-find-repos-with-homepage -u <username> -o           # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-homepage -u <username> -o out.txt   # also save URLs to a specific file
+#   github-find-repos-with-homepage --version                  # show version
 #   github-find-repos-with-homepage --help                     # show help
 #
 # Lists repositories with a homepage set and checks each URL over HTTP:
@@ -70,6 +71,8 @@ while [[ $# -gt 0 ]]; do
             else
                 OUTPUT_FILE="$2"; shift 2
             fi ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)

@@ -7,6 +7,7 @@
 #   github-find-repos-with-pages -u <username> -r                   # output repo URLs (github.com/owner/repo)
 #   github-find-repos-with-pages -u <username> -o                   # also save URLs to auto-named file in $PWD
 #   github-find-repos-with-pages -u <username> -o pages.txt         # also save URLs to a specific file
+#   github-find-repos-with-pages --version                          # show version
 #   github-find-repos-with-pages --help                             # show help
 #
 # Lists repositories that have GitHub Pages enabled. Default mode: Pages URLs
@@ -52,6 +53,8 @@ while [[ $# -gt 0 ]]; do
             else
                 OUTPUT_FILE="$2"; shift 2
             fi ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)

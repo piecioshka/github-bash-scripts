@@ -8,6 +8,7 @@
 #   github-find-repos-by-metadata -u <username> -q <query> -E               # treat query as regex
 #   github-find-repos-by-metadata -u <username> -q <query> -o               # also save repo URLs to auto-named file
 #   github-find-repos-by-metadata -u <username> -q <query> -o out.txt       # also save repo URLs to a specific file
+#   github-find-repos-by-metadata --version                                 # show version
 #   github-find-repos-by-metadata --help                                    # show help
 #
 # Searches across repo metadata (name, description, homepage, topics, language).
@@ -59,6 +60,8 @@ while [[ $# -gt 0 ]]; do
             else
                 OUTPUT_FILE="$2"; shift 2
             fi ;;
+        -V|--version)
+            show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         *)

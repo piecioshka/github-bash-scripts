@@ -2,6 +2,7 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-14 — Added `-V` / `--version` to every script, reporting a single version shared across the repo from the new `VERSION` file (starting at `0.1.0`).
 - 2026-08-14 — Documented `CONCURRENCY` in the usage headers of the six finders that use it, corrected the `github-scan-secrets` input description (stdin is a fallback, not a combined source), and spelled out that report redaction only masks token-like strings of 20+ characters, so short secrets stay readable.
 - 2026-08-14 — Hardened CI: both jobs now run with `permissions: contents: read`, `actions/checkout` is pinned to a commit SHA like the shellcheck action, and Dependabot keeps the action pins current.
 - 2026-08-14 — Changed the write scripts to accept bare `owner/repo` entries in `-f` files and on stdin (previously silently dropped by a URL-only filter), to report unrecognized lines as `SKIP` instead of discarding them, and to collapse duplicates via the shared `normalize_input`.
