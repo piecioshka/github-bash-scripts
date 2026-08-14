@@ -106,8 +106,7 @@ FAILED=0
 while read -r url; do
     enable_pages "$url"
 done < <(input_source \
-    | grep -vE '^[[:space:]]*(#|$)' \
-    | grep -Eo 'https?://[^ ]+')
+    | normalize_input)
 
 # Exit 1 when the repo listing failed or any repo ended in a FAIL row
 # (useful for chaining and CI).

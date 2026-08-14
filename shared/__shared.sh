@@ -112,20 +112,27 @@ print_kv() {
 #   https://github.com/owner/repo[.git][/...]
 #   https://owner.github.io/repo[/...]
 #   owner/repo[.git]
+# Slugs are spliced into privileged API paths (repos/<slug>, DELETE refs), so
+# only the characters GitHub allows in owner and repo names get through -
+# anything else (query strings, fragments, extra path segments, scp-style git
+# URLs, stray protocols) is rejected as unrecognized.
+__valid_slug() {
+    [[ "$1" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]
+}
+
 url_to_slug() {
-    local input="$1"
+    local input="$1" candidate=""
     input="${input#"${input%%[![:space:]]*}"}"
     input="${input%"${input##*[![:space:]]}"}"
-    if [[ "$input" =~ ^https?://github\.com/([^/]+)/([^/]+) ]]; then
-        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
-        return
+    if [[ "$input" =~ ^https?://github\.com/([^/?#]+)/([^/?#]+) ]]; then
+        candidate="${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+    elif [[ "$input" =~ ^https?://([^./]+)\.github\.io/([^/?#]+) ]]; then
+        candidate="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    elif [[ "$input" != *://* && "$input" != *@* && "$input" == */* ]]; then
+        candidate="${input%.git}"
     fi
-    if [[ "$input" =~ ^https?://([^./]+)\.github\.io/([^/]+) ]]; then
-        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
-        return
-    fi
-    if [[ "$input" != http*://* && "$input" == */* ]]; then
-        echo "${input%.git}"
+    if [[ -n "$candidate" ]] && __valid_slug "$candidate"; then
+        echo "$candidate"
         return
     fi
     echo ""
@@ -244,6 +251,30 @@ input_source() {
 
     show_usage
     exit 1
+}
+
+# normalize_input - filter between input_source and a processing loop. Drops
+# blank lines and # comments, and emits one entry per remaining line: repo URLs
+# and bare owner/repo slugs alike (both work as positional arguments, so an
+# edited -f file or a piped list must accept them too). Unrecognized lines are
+# passed through unchanged so the loop can report them as SKIP rather than
+# dropping them silently. Duplicates are emitted once - the same repo listed
+# twice would otherwise be acted on twice.
+normalize_input() {
+    local line slug
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
+        # strip surrounding whitespace and anything after the first space
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%%[[:space:]]*}"
+        [[ -z "$line" ]] && continue
+        slug=$(url_to_slug "$line")
+        if [[ -n "$slug" ]]; then
+            echo "https://github.com/$slug"
+        else
+            echo "$line"
+        fi
+    done | awk '!seen[$0]++'
 }
 
 # require_gh_token - reads the gh auth token into GH_HELPER_TOKEN (exported for
