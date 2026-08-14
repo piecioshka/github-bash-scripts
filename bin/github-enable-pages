@@ -12,9 +12,11 @@
 # Enables GitHub Pages for each repo on the list. Repos that already have
 # Pages enabled are reported as HAVE and left untouched.
 #
-# Accepts both URL formats (one per line, lines starting with # are ignored):
+# Accepts, one entry per line (lines starting with # are ignored, duplicates
+# collapsed, unrecognized lines reported as SKIP):
 #   - https://github.com/owner/repo
 #   - https://owner.github.io/repo/
+#   - owner/repo
 #
 # Exit codes: 0 = no failures, 1 = at least one repo ended in a FAIL row.
 #

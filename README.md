@@ -12,7 +12,7 @@ Collection of bash helpers for managing GitHub repositories in bulk: listing, au
 
 - 🔎 Nine `find` scripts to audit repositories in bulk: GitHub Pages, homepages (with HTTP status checks), wikis, Projects, branches, LICENSE files, README-only placeholders, missing descriptions and free-text metadata search
 - 🧹 Write scripts to clean up in bulk: enable Pages, delete leftover `gh-pages` branches, clear homepages, disable empty wikis and unused Projects
-- 🕵️ Secret scanning of the full git history of each repo (`gitleaks` + a grep pattern), with redacted reports saved to an owner-only directory
+- 🕵️ Secret scanning of the full git history of each repo (`gitleaks` + a grep pattern), with partially redacted reports saved to an owner-only directory
 - 🛡️ Safety first: `--dry-run`/`DRY_RUN=1` previews, narrow matching by default with explicit `--force` for anything broader, and hard guards around destructive actions
 - ⛓️ Chainable by design: plain URL lists on stdout and in `-o` files feed straight into the next script
 - 🚦 CI-friendly exit codes: non-zero on failures, broken homepages and secret findings
@@ -145,8 +145,10 @@ github-find-repos-without-description -u piecioshka -o no-desc.txt     # also sa
 
 ```bash
 # Scan git history of each repo with gitleaks + grep pattern (parallel)
-# Reports land in ./scan-results (chmod 700) and are redacted; exit code
-# 2 signals findings, 1 signals scan failures.
+# Reports land in ./scan-results (created chmod 700) and are partially
+# redacted: gitleaks --redact plus masking of 20+ char token-like strings,
+# so SHORT secrets stay readable - treat the reports as sensitive.
+# Exit code 2 signals findings, 1 signals scan failures.
 github-scan-secrets -u piecioshka
 github-scan-secrets -u piecioshka -v public
 github-scan-secrets -u piecioshka -F
@@ -238,7 +240,8 @@ github-disable-wiki -f empty-wikis.txt
 - `-f <file>` - input file with URLs (one per line; lines starting with `#` are ignored)
 - stdin - pipe URLs in
 - positional slugs - scripts that consume a repo list also take `owner/repo` args directly (e.g. `github-disable-wiki owner/repo`)
-- input priority (scripts that consume a repo list): positional args → `-f <file>` → `-u <username>` → stdin; `github-scan-secrets` combines all given sources and deduplicates
+- input priority (scripts that consume a repo list): positional args → `-f <file>` → `-u <username>` → stdin, first available wins; `github-scan-secrets` instead combines positional args, `-f` and `-u`, and falls back to stdin only when those yield nothing
+- entries can be repo URLs (`https://github.com/owner/repo`) or bare `owner/repo` slugs; duplicates are collapsed and unrecognized lines are reported as `SKIP`
 - `-v public|private|all` - visibility filter (default: `all`)
 - `-F/--include-forks` - include forks (default: excluded)
 - `-e` - narrow the output to the "problematic" subset: `--only-broken` (homepage) or `--only-unused` (wiki, projects)

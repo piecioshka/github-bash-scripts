@@ -19,9 +19,11 @@
 # source is another branch, is unknown, or whose Pages are built by GitHub
 # Actions (build_type=workflow) are refused.
 #
-# Accepts both URL formats (one per line, lines starting with # are ignored):
+# Accepts, one entry per line (lines starting with # are ignored, duplicates
+# collapsed, unrecognized lines reported as SKIP):
 #   - https://github.com/owner/repo
 #   - https://owner.github.io/repo/
+#   - owner/repo
 #
 # WARNING: branch deletion is DESTRUCTIVE and IRREVERSIBLE (unless you have a
 # local copy of the branch). Preview with DRY_RUN=1 first.

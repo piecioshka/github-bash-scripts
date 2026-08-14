@@ -23,8 +23,10 @@
 # Pairs with github-find-repos-with-projects-feature: `github-find-repos-with-projects-feature -u me -e -o p.txt`
 # then `github-disable-projects-feature -f p.txt`.
 #
-# Accepts repo URLs (one per line, lines starting with # are ignored):
+# Accepts, one entry per line (lines starting with # are ignored, duplicates
+# collapsed, unrecognized lines reported as SKIP):
 #   - https://github.com/owner/repo
+#   - owner/repo
 #
 # Exit codes: 0 = no failures, 1 = at least one repo ended in a FAIL row.
 #

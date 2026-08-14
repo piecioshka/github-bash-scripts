@@ -25,8 +25,9 @@ bundle.
 ## Repository layout
 
 - `bin/` - the executable scripts
-- `shared/__shared.sh` - common helpers (usage extraction, arg validation,
-  row/status printing, badges, slug parsing, input source resolution, the
+- `shared/__shared.sh` - common helpers (usage extraction, arg validation via
+  `require_value`/`validate_visibility`, row/status printing, badges, slug
+  parsing and validation, input source resolution plus `normalize_input`, the
   gh-token git credential helper); it sources `shared/__colors.sh` itself
 - `shared/__colors.sh` - `C_*` color variables, enabled only when stdout is a
   TTY, exported for parallel workers
@@ -58,8 +59,10 @@ scripts.
   the script with `--help` prints that block
 - Input sources for scripts that consume a repo list, in priority order:
   positional args → `-f <file>` → `-u <user>` → stdin → show usage and exit if
-  none provided (`github-scan-secrets` combines all given sources instead of
-  picking the first). The shared `input_source()` implements this order
+  none provided. `github-scan-secrets` instead combines positional args, `-f`
+  and `-u`, using stdin only as a fallback. The shared `input_source()`
+  implements this order, and `normalize_input()` accepts both repo URLs and
+  bare `owner/repo` slugs, collapsing duplicates
 - Common flags (keep letters consistent repo-wide):
   - `-u, --user <username>` - scope to a user's repos
   - `-f, --file <path>` - input file
@@ -81,14 +84,27 @@ scripts.
 - Write scripts must support `DRY_RUN=1` and `--dry-run` to preview actions.
   Normalize the env var through the shared `normalize_dry_run` - every value
   except an explicit off (`0`, `false`, `no`, `off`, empty) enables dry-run
+- Flag values are validated with the shared `require_value`, which rejects a
+  missing value AND one that looks like another flag (`-u -F` must not set the
+  username to `-F`)
 - Exit codes: write scripts count `FAIL` rows in a `FAILED` counter (keep the
   processing loop in the main shell: `while ... done < <(input_source ...)`,
-  not `input_source | while ...`) and exit `1` when any repo failed.
+  not `input_source | while ...`) and exit `1` when any repo failed. Because
+  `input_source` runs in a subshell, a failed `gh repo list` is signalled
+  through a marker file - check it with `input_source_failed` after the loop.
+  Finders that call `gh repo list` directly must check its exit status.
   `github-find-repos-with-homepage` exits `1` on `BROKEN` rows;
   `github-scan-secrets` exits `1` on scan failures and `2` on findings
 - `find` scripts print results to stdout only; file output is opt-in via
   `-o [<path>]`. A per-repo check that fails inconclusively (network, auth,
-  rate limit) must WARN on stderr and skip - never silently misreport
+  rate limit) must WARN on stderr and skip - never silently misreport. Only an
+  HTTP 404 (and 409 for empty-repo trees) counts as a genuine negative
+- Free text from repo metadata (homepage URLs) must never be split by `xargs`
+  word parsing - pass whole records NUL-separated (`tr '\n' '\0' | xargs -0`)
+  and split them on tabs inside the worker
+- `@tsv` fields read with `IFS=$'\t' read` need a per-field marker prefix
+  (`"u:" + …`): tabs are IFS whitespace, so consecutive ones collapse and an
+  empty field would shift every column after it
 - Colored columnar output only when stdout is a TTY (handled by
   `shared/__colors.sh`)
 - Repo state badges (`[🔐 private]` yellow, `[🍴 fork]` blue, `[📦 archived]`
@@ -141,5 +157,10 @@ strong reason and a PR discussion:
   match-anything by default
 - `DRY_RUN` must stay fail-safe: anything that is not an explicit off value
   enables the dry run (see `normalize_dry_run`)
-- `github-scan-secrets` reports must stay redacted (gitleaks `--redact`, the
-  grep matches masked) and the results directory owner-only (`chmod 700`)
+- `github-scan-secrets` reports must stay redacted (gitleaks `--redact`, plus
+  masking of 20+ character token-like strings in the grep matches - short
+  secrets are NOT masked, so the reports remain sensitive). A results directory
+  the script creates is `chmod 700`; an existing one is left alone with a
+  warning, never silently narrowed
+- A broken scan must never read as a clean repo: a gitleaks run that exits >1
+  or leaves no report, and a failing `git log`, are `FAIL` rows

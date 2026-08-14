@@ -19,6 +19,9 @@
 # bare -o generates <PWD>/wiki-<username>_<timestamp>.txt (wiki-unused-<username>_… with
 # --only-unused), -o <path> uses that path.
 #
+# Env:
+#   CONCURRENCY=10   how many repos to check in parallel
+#
 # Requires: gh CLI (authenticated), git
 
 set -u

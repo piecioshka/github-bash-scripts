@@ -18,6 +18,9 @@
 # bare -o generates <PWD>/readme-only-<username>_<timestamp>.txt, -o <path> uses
 # that path.
 #
+# Env:
+#   CONCURRENCY=10   how many repos to check in parallel
+#
 # Requires: gh CLI (authenticated)
 
 set -u

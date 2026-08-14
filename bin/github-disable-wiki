@@ -21,8 +21,10 @@
 # Pairs with github-find-repos-with-wiki: `github-find-repos-with-wiki -u me -e -o w.txt`
 # then `github-disable-wiki -f w.txt`.
 #
-# Accepts repo URLs (one per line, lines starting with # are ignored):
+# Accepts, one entry per line (lines starting with # are ignored, duplicates
+# collapsed, unrecognized lines reported as SKIP):
 #   - https://github.com/owner/repo
+#   - owner/repo
 #
 # Exit codes: 0 = no failures, 1 = at least one repo ended in a FAIL row.
 #
