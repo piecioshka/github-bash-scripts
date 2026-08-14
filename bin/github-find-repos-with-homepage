@@ -113,6 +113,9 @@ vis_args=()
 jq_filter='.[]'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
 jq_filter="$jq_filter | select(.homepageUrl != null and .homepageUrl != \"\") | [.nameWithOwner, .homepageUrl, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
+# Emit the raw (pre-filter) repo count first, so a truncated listing can be
+# detected even when the jq filter narrows the results.
+jq_filter="\"__count__\" + (length|tostring), ($jq_filter)"
 
 print_kv "User" "$GH_USER"
 print_kv "Visibility" "$VISIBILITY"
@@ -131,11 +134,17 @@ echo
 # 1. Fetch repos with non-empty homepage
 # A failing `gh repo list` (unknown user, expired auth, rate limit) must not
 # look like "this user has no repos" - report it and exit non-zero.
-if ! entries=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+if ! entries=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit "$REPO_LIMIT" \
     --json nameWithOwner,isFork,isArchived,visibility,homepageUrl --jq "$jq_filter" 2>&1); then
     echo "ERROR: gh repo list failed for '$GH_USER': $(head -n1 <<< "$entries")" >&2
     exit 1
 fi
+
+# First line carries the raw repo count emitted by the jq filter above.
+entries_total="$(head -n1 <<< "$entries")"
+entries_total="${entries_total#__count__}"
+entries="$(tail -n +2 <<< "$entries")"
+warn_if_truncated "$entries_total"
 
 if [[ -z "$entries" ]]; then
     echo "No repos with a homepage set."

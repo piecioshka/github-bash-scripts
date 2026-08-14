@@ -86,6 +86,9 @@ vis_args=()
 jq_filter='.[]'
 [[ "$INCLUDE_FORKS" == "0" ]] && jq_filter='.[] | select(.isFork==false)'
 jq_filter="$jq_filter | [.nameWithOwner, (.visibility | ascii_downcase), (.isFork|tostring), (.isArchived|tostring)] | @tsv"
+# Emit the raw (pre-filter) repo count first, so a truncated listing can be
+# detected even when the jq filter narrows the results.
+jq_filter="\"__count__\" + (length|tostring), ($jq_filter)"
 
 print_kv "User" "$GH_USER"
 print_kv "Visibility" "$VISIBILITY"
@@ -96,11 +99,17 @@ echo
 
 # A failing `gh repo list` (unknown user, expired auth, rate limit) must not
 # look like "this user has no repos" - report it and exit non-zero.
-if ! repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+if ! repos=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit "$REPO_LIMIT" \
     --json nameWithOwner,visibility,isFork,isArchived --jq "$jq_filter" 2>&1); then
     echo "ERROR: gh repo list failed for '$GH_USER': $(head -n1 <<< "$repos")" >&2
     exit 1
 fi
+
+# First line carries the raw repo count emitted by the jq filter above.
+repos_total="$(head -n1 <<< "$repos")"
+repos_total="${repos_total#__count__}"
+repos="$(tail -n +2 <<< "$repos")"
+warn_if_truncated "$repos_total"
 
 if [[ -z "$repos" ]]; then
     echo "No repos match the filter."

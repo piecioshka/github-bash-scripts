@@ -85,6 +85,18 @@ normalize_dry_run() {
     esac
 }
 
+# How many repos `gh repo list` may return. gh silently returns exactly this
+# many when a user has more, so warn_if_truncated below reports the cut.
+REPO_LIMIT="${REPO_LIMIT:-1000}"
+
+# warn_if_truncated <count> - warns when a listing came back exactly at the
+# limit, which is indistinguishable from a listing that was cut short.
+warn_if_truncated() {
+    [[ "${1:-0}" -ge "$REPO_LIMIT" ]] || return 0
+    echo "${C_YELLOW}WARN:${C_RESET} fetched $1 repos, the current REPO_LIMIT - the list may be truncated." >&2
+    echo "      Raise it if this user has more, e.g. REPO_LIMIT=5000 $(basename "$0") ..." >&2
+}
+
 # make_timestamp -> e.g. 2026-08-13_15-44-02 (for auto-named output files).
 make_timestamp() {
     date +%Y-%m-%d_%H-%M-%S
@@ -239,16 +251,17 @@ input_source() {
         # GH_LIST_FAILED tell the caller (input_source usually runs inside a
         # process substitution, where exiting would be swallowed).
         local listing
-        if ! listing=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+        if ! listing=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit "$REPO_LIMIT" \
             --json "$fields" --jq "$jq_filter" 2>&1); then
             echo "ERROR: gh repo list failed for '$GH_USER': $(head -n1 <<< "$listing")" >&2
             : > "$GH_LIST_FAILED"
             return
         fi
-        local slug
+        local slug listed=0
         while IFS= read -r slug; do
-            [[ -n "$slug" ]] && echo "https://github.com/$slug"
+            [[ -n "$slug" ]] && { echo "https://github.com/$slug"; listed=$((listed + 1)); }
         done <<< "$listing"
+        warn_if_truncated "$listed"
         return
     fi
 

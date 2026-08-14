@@ -85,13 +85,15 @@ echo
 
 # A failing `gh repo list` (unknown user, expired auth, rate limit) must not
 # look like "this user has no repos" - report it and exit non-zero.
-if ! rows=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+if ! rows=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit "$REPO_LIMIT" \
     --json nameWithOwner,description,visibility,isFork,isArchived --jq "$jq_filter" 2>&1); then
     echo "ERROR: gh repo list failed for '$GH_USER': $(head -n1 <<< "$rows")" >&2
     exit 1
 fi
 
 total=$(echo "$rows" | grep -c . || true)
+# This script does not pre-filter in jq, so total is the raw repo count.
+warn_if_truncated "$total"
 results=$(echo "$rows" | awk -F'\t' 'BEGIN{OFS="\t"} $1=="empty"{print $2,$3,$4,$5}')
 
 if [[ -z "$results" ]]; then
