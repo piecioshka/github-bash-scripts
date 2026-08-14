@@ -39,13 +39,13 @@ fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -u|--user)
-            [[ -z "${2:-}" ]] && { echo "ERROR: --user requires a value" >&2; exit 1; }
+            require_value --user "${2:-}" "a username"
             GH_USER="$2"; shift 2 ;;
         -q|--query)
-            [[ -z "${2:-}" ]] && { echo "ERROR: --query requires a value" >&2; exit 1; }
+            require_value --query "${2:-}" "a value"
             QUERY="$2"; shift 2 ;;
         -v|--visibility)
-            [[ -z "${2:-}" ]] && { echo "ERROR: --visibility requires a value" >&2; exit 1; }
+            require_value --visibility "${2:-}" "a value"
             VISIBILITY="$2"; shift 2 ;;
         -F|--include-forks)
             INCLUDE_FORKS=1; shift ;;

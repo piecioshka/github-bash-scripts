@@ -41,6 +41,23 @@ require_cmd() {
     exit 1
 }
 
+# require_value <flag> <value> <what> - exits when a flag's value is missing or
+# looks like another flag. Without the second check `-u -F` would silently set
+# the username to "-F" and the run would go looking for a user named after a
+# flag. Values that legitimately start with a dash can be passed as --flag=-x
+# is not supported; use `--` semantics by quoting, e.g. -q ' -x'.
+require_value() {
+    local flag="$1" value="${2:-}" what="${3:-a value}"
+    if [[ -z "$value" ]]; then
+        echo "ERROR: $flag requires $what" >&2
+        exit 1
+    fi
+    if [[ "$value" == -* ]]; then
+        echo "ERROR: $flag requires $what, got the flag '$value'" >&2
+        exit 1
+    fi
+}
+
 # validate_visibility <value> - exits on anything except public/private/all.
 validate_visibility() {
     case "$1" in
