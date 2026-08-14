@@ -70,8 +70,16 @@ enable_pages() {
         return
     fi
 
-    if gh api "repos/$slug/pages" > /dev/null 2>&1; then
+    # HTTP 404 = Pages not enabled yet (proceed). Any other error (rate limit,
+    # auth, network) is inconclusive: enabling blindly would POST over an
+    # existing site and the dry-run preview would be wrong, so refuse instead.
+    local probe
+    if probe=$(gh api "repos/$slug/pages" 2>&1); then
         print_row "HAVE" "$slug" "Pages already enabled"
+        return
+    fi
+    if ! grep -q 'HTTP 404' <<< "$probe"; then
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "Pages check inconclusive: $(head -n1 <<< "$probe")"
         return
     fi
 

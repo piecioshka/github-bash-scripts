@@ -73,14 +73,24 @@ delete_pages_branch() {
 
     # Check if Pages is enabled and read its exact source. Deliberately no
     # default value here: an absent .source.branch (e.g. Pages built by a
-    # GitHub Actions workflow) must NOT be treated as 'gh-pages'.
+    # GitHub Actions workflow) must NOT be treated as 'gh-pages'. Fields are
+    # marked with a placeholder so an empty one cannot shift the columns when
+    # `read` collapses consecutive tabs.
     local line build_type branch
     if ! line=$(gh api "repos/$slug/pages" \
-        --jq '[(.build_type // ""), (.source.branch // "")] | @tsv' 2>/dev/null); then
-        print_row "NONE" "$slug" "Pages not enabled"
+        --jq '[("t:" + (.build_type // "")), ("b:" + (.source.branch // ""))] | @tsv' 2>&1); then
+        # HTTP 404 = Pages genuinely not enabled; anything else (rate limit,
+        # auth, network) is inconclusive and must not read as "nothing to do".
+        if grep -q 'HTTP 404' <<< "$line"; then
+            print_row "NONE" "$slug" "Pages not enabled"
+        else
+            FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "Pages check inconclusive: $(head -n1 <<< "$line")"
+        fi
         return
     fi
     IFS=$'\t' read -r build_type branch <<< "$line"
+    build_type="${build_type#t:}"
+    branch="${branch#b:}"
 
     # SAFETY: Pages built by GitHub Actions have no source branch to delete -
     # a 'gh-pages' branch that happens to exist may hold unrelated content.
