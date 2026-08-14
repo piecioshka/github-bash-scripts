@@ -146,10 +146,14 @@ if [[ "$NO_CHECK" == "0" ]]; then
     echo
 fi
 
-# 2. Check each homepage URL in parallel
+# 2. Check each homepage URL in parallel. The worker receives ONE argument:
+# the whole tab-separated record, split here - so spaces and quotes inside a
+# homepage URL can never shift the columns.
 # shellcheck disable=SC2329  # invoked indirectly via xargs bash -c
 check_entry() {
-    local slug="$1" url="$2" vis="$3" is_fork="$4" is_archived="$5"
+    local record="$1"
+    local slug url vis is_fork is_archived
+    IFS=$'\t' read -r slug url vis is_fork is_archived <<< "$record"
     local code
     code=$(curl -s -o /dev/null -L -w "%{http_code}" \
         --max-time "$TIMEOUT" \
@@ -170,9 +174,13 @@ if [[ "$NO_CHECK" == "1" ]]; then
     # No HTTP round-trips - synthesize rows straight from the metadata.
     results=$(echo "$entries" | awk -F'\t' '{ print "-\t-\t" $0 }')
 else
-    results=$(echo "$entries" \
-        | tr '\t' '\n' \
-        | xargs -n 5 -P "$CONCURRENCY" bash -c 'check_entry "$@"' _)
+    # Homepage URLs are free text from repo metadata: they may contain spaces
+    # and quotes, which xargs would either split on or choke on ("unterminated
+    # quote" kills the whole batch). Feed the workers NUL-separated records
+    # instead - xargs -0 does no quote or whitespace parsing at all.
+    # shellcheck disable=SC2016  # $1 is the worker's argument, expanded by the worker
+    results=$(tr '\n' '\0' <<< "$entries" \
+        | xargs -0 -n 1 -P "$CONCURRENCY" bash -c 'check_entry "$1"' _)
 fi
 
 # 3. Print sorted (optionally only BROKEN rows)
