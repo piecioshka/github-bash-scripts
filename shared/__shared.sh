@@ -141,6 +141,22 @@ format_badges() {
     printf "%s" "$badges"
 }
 
+# Marker file used to signal a `gh repo list` failure out of the process
+# substitution that input_source usually runs in (a subshell cannot set a
+# variable in its parent). Created empty on failure, checked afterwards by
+# input_source_failed.
+GH_LIST_FAILED="$(mktemp -u -t gh-list-failed.XXXXXX)"
+export GH_LIST_FAILED
+# shellcheck disable=SC2064  # expand GH_LIST_FAILED now, not at trap time
+trap "rm -f '$GH_LIST_FAILED'" EXIT
+
+# input_source_failed - true when input_source could not list the user's repos.
+# Call it after the processing loop so the script can exit non-zero instead of
+# reporting a silent, empty run.
+input_source_failed() {
+    [[ -e "$GH_LIST_FAILED" ]]
+}
+
 # validate_input_source - input_source is consumed via a process substitution
 # (`while ... done < <(input_source ...)`), where its `exit 1` would die in the
 # subshell and the script would still finish with exit 0. Call this in the
@@ -202,9 +218,21 @@ input_source() {
         local fork_note="(forks excluded)"
         [[ "$INCLUDE_FORKS" == "1" ]] && fork_note="(forks included)"
         echo "${C_BOLD}Source:${C_RESET} gh repo list $GH_USER --visibility $VISIBILITY $fork_note${note:+ $note}" >&2
-        gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-            --json "$fields" --jq "$jq_filter" \
-            | sed 's#^#https://github.com/#'
+        # A failing `gh repo list` (unknown user, expired auth, rate limit)
+        # must not look like "this user has no repos": capture it, then let
+        # GH_LIST_FAILED tell the caller (input_source usually runs inside a
+        # process substitution, where exiting would be swallowed).
+        local listing
+        if ! listing=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+            --json "$fields" --jq "$jq_filter" 2>&1); then
+            echo "ERROR: gh repo list failed for '$GH_USER': $(head -n1 <<< "$listing")" >&2
+            : > "$GH_LIST_FAILED"
+            return
+        fi
+        local slug
+        while IFS= read -r slug; do
+            [[ -n "$slug" ]] && echo "https://github.com/$slug"
+        done <<< "$listing"
         return
     fi
 

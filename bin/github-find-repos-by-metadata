@@ -102,8 +102,13 @@ echo
 fork_filter='true'
 [[ "$INCLUDE_FORKS" == "0" ]] && fork_filter='.isFork == false'
 
-repos_json=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-    --json nameWithOwner,description,homepageUrl,repositoryTopics,primaryLanguage,isFork,isArchived,visibility)
+# A failing `gh repo list` (unknown user, expired auth, rate limit) must not
+# look like "this user has no repos" - report it and exit non-zero.
+if ! repos_json=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+    --json nameWithOwner,description,homepageUrl,repositoryTopics,primaryLanguage,isFork,isArchived,visibility 2>&1); then
+    echo "ERROR: gh repo list failed for '$GH_USER': $(head -n1 <<< "$repos_json")" >&2
+    exit 1
+fi
 
 triples=$(echo "$repos_json" | jq -r "
     .[] | select($fork_filter) |

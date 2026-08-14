@@ -80,8 +80,13 @@ print_kv "Forks" "$([[ $INCLUDE_FORKS == 1 ]] && echo included || echo excluded)
 [[ -n "$OUTPUT_FILE" ]] && print_kv "Output" "$OUTPUT_FILE"
 echo
 
-rows=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
-    --json nameWithOwner,description,visibility,isFork,isArchived --jq "$jq_filter")
+# A failing `gh repo list` (unknown user, expired auth, rate limit) must not
+# look like "this user has no repos" - report it and exit non-zero.
+if ! rows=$(gh repo list "$GH_USER" "${vis_args[@]}" --limit 1000 \
+    --json nameWithOwner,description,visibility,isFork,isArchived --jq "$jq_filter" 2>&1); then
+    echo "ERROR: gh repo list failed for '$GH_USER': $(head -n1 <<< "$rows")" >&2
+    exit 1
+fi
 
 total=$(echo "$rows" | grep -c . || true)
 results=$(echo "$rows" | awk -F'\t' 'BEGIN{OFS="\t"} $1=="empty"{print $2,$3,$4,$5}')
