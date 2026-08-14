@@ -17,6 +17,7 @@ Collection of bash helpers for managing GitHub repositories in bulk: listing, au
 - ⛓️ Chainable by design: plain URL lists on stdout and in `-o` files feed straight into the next script
 - 🚦 CI-friendly exit codes: non-zero on failures, broken homepages and secret findings
 - ⚡ Parallel per-repo checks (`CONCURRENCY`), colored columnar TTY output and repo state badges (`[🔐 private]`, `[🍴 fork]`, `[📦 archived]`)
+- 📝 Auditable runs: `-l/--log` writes a TSV of every repo touched, and truncated listings are flagged instead of silently dropping repos
 - 🧩 One shared bash library (`shared/`), `shellcheck -x` clean, no dependencies beyond `gh`, `jq`, `curl`, `git` and `gitleaks`
 
 ## Repository layout
@@ -184,6 +185,7 @@ github-delete-pages-branch owner/repo another/repo       # positional slugs
 
 # Clear the repo website/homepage URL
 github-clear-homepage -u piecioshka                      # only clears *.github.io
+github-clear-homepage -u piecioshka -l run.tsv           # also log what happened per repo
 github-clear-homepage -u piecioshka -v public
 github-clear-homepage -u piecioshka -v private
 github-clear-homepage -u piecioshka -F
@@ -228,7 +230,12 @@ github-find-repos-with-pages -u piecioshka -r -o all-pages.txt
 DRY_RUN=1 github-delete-pages-branch -f all-pages.txt
 github-delete-pages-branch -f all-pages.txt
 
-# 4) Find repos with empty wikis, review the list, then disable those wikis
+# 4) Log a write run, then replay only the repos that failed
+github-clear-homepage -u piecioshka -l run.tsv
+awk -F'\t' '$1=="FAIL"{print $2}' run.tsv > retry.txt
+github-clear-homepage -f retry.txt
+
+# 5) Find repos with empty wikis, review the list, then disable those wikis
 github-find-repos-with-wiki -u piecioshka -e -o empty-wikis.txt
 # ...review empty-wikis.txt...
 DRY_RUN=1 github-disable-wiki -f empty-wikis.txt
@@ -251,6 +258,8 @@ github-disable-wiki -f empty-wikis.txt
 - Colored columnar output when writing to a TTY
 - Repo state badges on TTY: `[🔐 private]` (yellow), `[🍴 fork]` (blue), `[📦 archived]` (brown) - shown only for non-default states, never written to `-o` output files
 - `find` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
+- write scripts take `-l/--log <path>` instead: a TSV record of what happened per repo (`status`, `repo`, `details`, including `KEEP`/`SKIP`/`FAIL` rows) for auditing a run and replaying its failures
+- `REPO_LIMIT=1000` - how many repos to fetch per listing. `gh` returns exactly the limit without saying so, so a listing that comes back at the limit prints a `WARN`; raise the variable when a user has more repos
 
 Run any script with `--help` to see its full usage, or `--version` to print the version (shared across all scripts, from the [`VERSION`](VERSION) file).
 

@@ -2,6 +2,8 @@
 
 All notable changes to this project, newest first.
 
+- 2026-08-14 — Added `-l` / `--log <path>` to the write scripts: a TSV record (`status`, `repo`, `details`) of what happened to each repo, including `KEEP`/`SKIP`/`FAIL` rows, so a run can be audited and its failures replayed. Written by the shared `print_row`, so the log cannot drift from the printed output.
+- 2026-08-14 — Replaced the hardcoded `--limit 1000` with the `REPO_LIMIT` env var and added a truncation warning: `gh repo list` returns exactly the limit when a user has more repositories without signalling it, so a listing that comes back at the limit now prints a `WARN` naming the variable to raise.
 - 2026-08-14 — Added `-V` / `--version` to every script, reporting a single version shared across the repo from the new `VERSION` file (starting at `0.1.0`).
 - 2026-08-14 — Documented `CONCURRENCY` in the usage headers of the six finders that use it, corrected the `github-scan-secrets` input description (stdin is a fallback, not a combined source), and spelled out that report redaction only masks token-like strings of 20+ characters, so short secrets stay readable.
 - 2026-08-14 — Hardened CI: both jobs now run with `permissions: contents: read`, `actions/checkout` is pinned to a commit SHA like the shellcheck action, and Dependabot keeps the action pins current.
@@ -12,7 +14,6 @@ All notable changes to this project, newest first.
 - 2026-08-14 — Fixed a failing `gh repo list` (unknown user, expired auth, rate limit) looking exactly like a user with no repositories: the finders report the error and exit 1, and the write scripts learn about it through a marker file, since `input_source` runs inside a process substitution.
 - 2026-08-14 — Changed flag parsing to reject a value that looks like another flag: `-u -F` used to set the username to `-F` (and in the write scripts the resulting error was swallowed, so they exited 0). The shared `require_value` replaced 38 inline checks.
 - 2026-08-14 — Fixed `github-scan-secrets` reporting a broken scan as a clean repo: a gitleaks crash left no report and still produced an `OK` row with exit 0, and a failing `git log` counted as "no matches". Both are `FAIL` rows now. The results directory is only `chmod 700` when the script creates it, so `-d` pointing at an existing shared directory is no longer silently narrowed; `RESULTS_TSV` was renamed `RESULTS_LOG` (the file is pipe-separated).
-
 - 2026-08-13 — Aligned CI with the documented bar: shellcheck runs at the default severity (the `severity: warning` override is gone) and a new `usage-smoke` job runs the `--help` smoke test that CONTRIBUTING already treated as a blocker.
 - 2026-08-13 — Listed `--dry-run` (and `-b`/`-p` in `github-enable-pages`) in the unknown-flag hint messages of the write scripts.
 - 2026-08-13 — Changed `github-disable-projects-feature` to report an unreadable linked-project count as `FAIL` (exit 1) instead of `SKIP`, matching how `github-disable-wiki` treats an inconclusive wiki check.

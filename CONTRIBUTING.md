@@ -76,14 +76,17 @@ scripts.
     stdout only). With `<path>` writes to that exact path; bare `-o` (or
     followed by another flag) generates `<name>_YYYY-MM-DD_HH-mm-ss.txt`
     in `$PWD`
+  - `-l, --log <path>` (write scripts) - TSV record of the run: one
+    `status<TAB>repo<TAB>details` line per repo, written by `print_row` so it
+    can never drift from the printed output. Not a URL list - that is `-o`
   - `-V, --version` - print `<script name> <version>` from the repo's
     `VERSION` file (via the shared `show_version`)
   - `-h, --help` - show usage
 - Short-flag registry (one meaning per letter across the whole repo):
   `-b` branch, `-c` case-sensitive, `-d` results dir, `-e` only-problematic,
   `-g` grep pattern, `-n` no-check, `-N` node-only, `-p` Pages source path,
-  `-P` check-pages, `-q` query, `-E` regex, `-V` version. Never reuse a taken
-  letter for a different meaning in another script
+  `-P` check-pages, `-q` query, `-E` regex, `-l` log, `-V` version. Never reuse
+  a taken letter for a different meaning in another script
 - Write scripts must support `DRY_RUN=1` and `--dry-run` to preview actions.
   Normalize the env var through the shared `normalize_dry_run` - every value
   except an explicit off (`0`, `false`, `no`, `off`, empty) enables dry-run
@@ -115,6 +118,10 @@ scripts.
   non-default states only, and must never leak into `-o` output files (which
   stay as plain URL lists for chaining)
 - Lines in input files starting with `#` are treated as comments and ignored
+- Every `gh repo list` call uses `--limit "$REPO_LIMIT"` and passes the number
+  of repos fetched to `warn_if_truncated` - gh returns exactly the limit
+  without signalling that more exist. Scripts that pre-filter in jq must count
+  the raw repos, not the filtered subset
 - Functions and variables used inside parallel workers (`xargs -P ... bash -c`)
   must be exported (`export -f`, `export`); the shared library already exports
   `paint_status`, `print_row`, `format_badges`, `git_authed` and the `C_*`
