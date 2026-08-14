@@ -116,12 +116,31 @@ paint_status() {
     esac
 }
 
-# print_row <status> <repo> [details] - one result row in the shared layout.
+# Machine-readable run log written by print_row when --log <path> is used.
+# Unlike the -o files of the find scripts (plain URL lists meant to be piped
+# into the next script), this records WHAT HAPPENED per repo: one
+# "status<TAB>repo<TAB>details" line, including KEEP/SKIP/FAIL rows.
+LOG_FILE=""
+
+# start_log - truncates the log file and writes its header. Called once, after
+# flag parsing, by scripts that accept --log.
+start_log() {
+    [[ -z "$LOG_FILE" ]] && return 0
+    if ! printf "status\trepo\tdetails\n" > "$LOG_FILE"; then
+        echo "ERROR: cannot write log file: $LOG_FILE" >&2
+        exit 1
+    fi
+}
+
+# print_row <status> <repo> [details] - one result row in the shared layout,
+# also appended to $LOG_FILE (without colors) when logging is on.
 print_row() {
     local status="$1"
     local repo="$2"
     local details="${3:-}"
     printf "%s  %-45s  %s\n" "$(paint_status "$status")" "$repo" "$details"
+    [[ -n "$LOG_FILE" ]] && printf "%s\t%s\t%s\n" "$status" "$repo" "$details" >> "$LOG_FILE"
+    return 0
 }
 
 # print_kv <label> <value> - aligned "Label:  value" header line.

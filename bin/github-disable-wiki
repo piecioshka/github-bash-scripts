@@ -10,6 +10,7 @@
 #   github-disable-wiki -u <username> --force            # disable wiki even if it has pages
 #   DRY_RUN=1 github-disable-wiki -u <username>          # show what would be done
 #   github-disable-wiki --dry-run -u <username>         # same as DRY_RUN=1
+#   github-disable-wiki -l run.tsv                       # also log what happened per repo (TSV)
 #   github-disable-wiki --version                        # show version
 #   github-disable-wiki --help                           # show help
 #
@@ -62,12 +63,15 @@ while [[ $# -gt 0 ]]; do
             FORCE=1; shift ;;
         --dry-run)
             DRY_RUN=1; shift ;;
+        -l|--log)
+            require_value --log "${2:-}" "a path"
+            LOG_FILE="$2"; shift 2 ;;
         -V|--version)
             show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)
-            echo "Unknown flag: $1 (use -f <file>, -u <username>, --force, --dry-run or --help)" >&2; exit 1 ;;
+            echo "Unknown flag: $1 (use -f <file>, -u <username>, --force, --dry-run, -l <path> or --help)" >&2; exit 1 ;;
         *)
             POSITIONAL+=("$1"); shift ;;
     esac
@@ -151,6 +155,7 @@ disable_wiki() {
 [[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode - will disable wiki even if it has pages ==${C_RESET}"
 
 validate_input_source
+start_log
 
 FAILED=0
 while read -r url; do

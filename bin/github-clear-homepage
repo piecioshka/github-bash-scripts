@@ -10,6 +10,7 @@
 #   github-clear-homepage -u <username> --force            # clear ANY homepage (not only *.github.io)
 #   DRY_RUN=1 github-clear-homepage -u <username>          # show what would be done
 #   github-clear-homepage --dry-run -u <username>          # same as DRY_RUN=1
+#   github-clear-homepage -l run.tsv                       # also log what happened per repo (TSV)
 #   github-clear-homepage --version                        # show version
 #   github-clear-homepage --help                           # show help
 #
@@ -59,12 +60,15 @@ while [[ $# -gt 0 ]]; do
             FORCE=1; shift ;;
         --dry-run)
             DRY_RUN=1; shift ;;
+        -l|--log)
+            require_value --log "${2:-}" "a path"
+            LOG_FILE="$2"; shift 2 ;;
         -V|--version)
             show_version ;;
         -h|--help)
             show_usage; exit 0 ;;
         -*)
-            echo "Unknown flag: $1 (use -f <file>, -u <username>, --force, --dry-run or --help)" >&2; exit 1 ;;
+            echo "Unknown flag: $1 (use -f <file>, -u <username>, --force, --dry-run, -l <path> or --help)" >&2; exit 1 ;;
         *)
             POSITIONAL+=("$1"); shift ;;
     esac
@@ -119,6 +123,7 @@ clear_homepage() {
 [[ "$FORCE" == "1" ]] && echo "${C_RED}== FORCE mode - will clear ANY homepage ==${C_RESET}"
 
 validate_input_source
+start_log
 
 FAILED=0
 while read -r url; do
