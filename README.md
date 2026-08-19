@@ -6,7 +6,7 @@
 
 <!-- prettier-ignore-end -->
 
-Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, wikis, projects, descriptions, merge settings and secrets.
+🔨 Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, wikis, projects, descriptions, merge settings and secrets.
 
 ## Features
 
