@@ -6,12 +6,12 @@
 
 <!-- prettier-ignore-end -->
 
-Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, wikis, projects, descriptions and secrets.
+Collection of bash helpers for managing GitHub repositories in bulk: listing, auditing and cleaning up Pages, homepages, wikis, projects, descriptions, merge settings and secrets.
 
 ## Features
 
 - 🔎 Nine `find` scripts to audit repositories in bulk: GitHub Pages, homepages (with HTTP status checks), wikis, Projects, branches, LICENSE files, README-only placeholders, missing descriptions and free-text metadata search
-- 🧹 Write scripts to clean up in bulk: enable Pages, delete leftover `gh-pages` branches, clear homepages, disable empty wikis and unused Projects
+- 🧹 Write scripts to clean up in bulk: enable Pages, delete leftover `gh-pages` branches, clear homepages, disable empty wikis and unused Projects, enable automatic deletion of merged branches
 - 🕵️ Secret scanning of the full git history of each repo (`gitleaks` + a grep pattern), with partially redacted reports saved to an owner-only directory
 - 🛡️ Safety first: `--dry-run`/`DRY_RUN=1` previews, narrow matching by default with explicit `--force` for anything broader, and hard guards around destructive actions
 - ⛓️ Chainable by design: plain URL lists on stdout and in `-o` files feed straight into the next script
@@ -209,6 +209,17 @@ github-disable-projects-feature -u piecioshka                    # only disables
 github-disable-projects-feature -u piecioshka --force            # disable even if projects exist
 github-disable-projects-feature -f empty-proj.txt
 github-disable-projects-feature owner/repo another/repo   # positional slugs
+
+# Enable "Automatically delete head branches" (off by default on every new repo)
+DRY_RUN=1 github-enable-delete-branch-on-merge -u piecioshka
+github-enable-delete-branch-on-merge -u piecioshka        # archived and already-enabled repos are left out
+github-enable-delete-branch-on-merge -u piecioshka -v public
+github-enable-delete-branch-on-merge -u piecioshka -F
+github-enable-delete-branch-on-merge -u piecioshka -l run.tsv    # also log what happened per repo
+github-enable-delete-branch-on-merge -f repos.txt
+cat repos.txt | github-enable-delete-branch-on-merge
+github-enable-delete-branch-on-merge owner/repo another/repo     # positional slugs
+THROTTLE=0 github-enable-delete-branch-on-merge owner/repo       # no pause between writes
 ```
 
 ### Chained workflows
@@ -260,12 +271,13 @@ github-disable-wiki -f empty-wikis.txt
 - `find` scripts print to stdout by default. Pass `-o <path>` to also save URLs to a specific file, or bare `-o` for an auto-named file (`<name>_YYYY-MM-DD_HH-mm-ss.txt`) in `$PWD`
 - write scripts take `-l/--log <path>` instead: a TSV record of what happened per repo (`status`, `repo`, `details`, including `KEEP`/`SKIP`/`FAIL` rows) for auditing a run and replaying its failures
 - `REPO_LIMIT=1000` - how many repos to fetch per listing. `gh` returns exactly the limit without saying so, so a listing that comes back at the limit prints a `WARN`; raise the variable when a user has more repos
+- `THROTTLE=1` - seconds to wait between two writes in `github-enable-delete-branch-on-merge`. GitHub caps REST mutations with a secondary rate limit of roughly 80 per minute, so a few hundred repos sent back-to-back trip it mid-run; the pause applies to actual writes only, never to reads, dry runs or untouched repos. Set `THROTTLE=0` for a handful of repos
 
 Run any script with `--help` to see its full usage, or `--version` to print the version (shared across all scripts, from the [`VERSION`](VERSION) file).
 
 ### Exit codes
 
-- write scripts (`github-clear-homepage`, `github-enable-pages`, `github-delete-pages-branch`, `github-disable-wiki`, `github-disable-projects-feature`): `0` = no failures, `1` = at least one repo ended in a `FAIL` row
+- write scripts (`github-clear-homepage`, `github-enable-pages`, `github-delete-pages-branch`, `github-disable-wiki`, `github-disable-projects-feature`, `github-enable-delete-branch-on-merge`): `0` = no failures, `1` = at least one repo ended in a `FAIL` row
 - `github-find-repos-with-homepage`: `0` = all checked homepages OK (or `-n`), `1` = at least one `BROKEN`
 - `github-scan-secrets`: `0` = clean, `1` = at least one scan failed (e.g. clone error), `2` = scans succeeded but findings were reported
 - other `find` scripts: `0` (inconclusive per-repo checks are reported as `WARN` on stderr)

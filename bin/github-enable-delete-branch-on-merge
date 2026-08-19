@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# Usage:
+#   github-enable-delete-branch-on-merge -u <username>                    # all non-fork repos of a user
+#   github-enable-delete-branch-on-merge -u <username> -v public          # only public
+#   github-enable-delete-branch-on-merge -u <username> -v private         # only private
+#   github-enable-delete-branch-on-merge -u <username> -F                 # include forks
+#   github-enable-delete-branch-on-merge -f links.txt                     # repos from a file
+#   echo "https://github.com/o/r" | github-enable-delete-branch-on-merge  # repos from stdin
+#   github-enable-delete-branch-on-merge owner/repo another/repo          # positional slugs
+#   DRY_RUN=1 github-enable-delete-branch-on-merge -u <username>          # show what would be done
+#   github-enable-delete-branch-on-merge --dry-run -u <username>          # same as DRY_RUN=1
+#   THROTTLE=0 github-enable-delete-branch-on-merge owner/repo            # no pause between writes
+#   github-enable-delete-branch-on-merge -u <username> -l run.tsv         # also log what happened per repo (TSV)
+#   github-enable-delete-branch-on-merge --version                        # show version
+#   github-enable-delete-branch-on-merge --help                           # show help
+#
+# For each repo on the list: turns on "Automatically delete head branches", so
+# GitHub removes the head branch of a pull request once it is merged. Repos that
+# already have it on are reported as HAVE and left untouched.
+#
+# The setting is PER REPOSITORY and off by default on every newly created repo.
+# Personal accounts have no account-wide default for it (organizations do), so
+# the only way to have it everywhere is to set it after the fact - and again
+# for each new repo.
+#
+# Archived repos cannot be edited (the API refuses them as read-only), so they
+# are reported as KEEP instead of counted as failures. A -u listing leaves them
+# out upfront, together with repos that already have the setting on.
+#
+# THROTTLE (default: 1) is the pause in seconds between two writes. GitHub caps
+# REST mutations with a secondary rate limit of roughly 80 per minute, and a few
+# hundred repos sent back-to-back trip it mid-run; a 1s pause keeps a batch
+# under that ceiling. It applies to writes only - reads, dry runs and untouched
+# repos are never delayed. Use THROTTLE=0 for a handful of repos.
+#
+# Accepts, one entry per line (lines starting with # are ignored, duplicates
+# collapsed, unrecognized lines reported as SKIP):
+#   - https://github.com/owner/repo
+#   - owner/repo
+#
+# Exit codes: 0 = no failures, 1 = at least one repo ended in a FAIL row.
+#
+# Requires: gh CLI (authenticated) with admin access on the repos.
+
+set -u
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../shared/__shared.sh
+source "$script_dir/../shared/__shared.sh"
+
+normalize_dry_run
+
+# Seconds to wait between two writes - see the THROTTLE note in the usage block.
+THROTTLE="${THROTTLE:-1}"
+
+if [[ $# -eq 0 && -t 0 ]]; then
+    show_usage
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--user)
+            require_value --user "${2:-}" "a username"
+            GH_USER="$2"; shift 2 ;;
+        -v|--visibility)
+            require_value --visibility "${2:-}" "a value"
+            VISIBILITY="$2"; shift 2 ;;
+        -F|--include-forks)
+            INCLUDE_FORKS=1; shift ;;
+        -f|--file)
+            require_value --file "${2:-}" "a path"
+            INPUT_FILE="$2"; shift 2 ;;
+        --dry-run)
+            DRY_RUN=1; shift ;;
+        -l|--log)
+            require_value --log "${2:-}" "a path"
+            LOG_FILE="$2"; shift 2 ;;
+        -V|--version)
+            show_version ;;
+        -h|--help)
+            show_usage; exit 0 ;;
+        -*)
+            echo "Unknown flag: $1 (use -f <file>, -u <username>, --dry-run, -l <path> or --help)" >&2; exit 1 ;;
+        *)
+            POSITIONAL+=("$1"); shift ;;
+    esac
+done
+
+require_cmd gh "brew install gh"
+validate_visibility "$VISIBILITY"
+
+# A non-numeric THROTTLE would make `sleep` fail once per repo, turning a
+# typo into hundreds of error lines around otherwise successful writes.
+if ! [[ "$THROTTLE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    echo "ERROR: invalid THROTTLE '$THROTTLE' (seconds between writes, e.g. 0, 1, 0.5)" >&2
+    exit 1
+fi
+
+enable_auto_delete() {
+    local url="$1"
+    local slug
+    slug=$(url_to_slug "$url")
+
+    if [[ -z "$slug" ]]; then
+        print_row "SKIP" "$url" "unrecognized URL"
+        return
+    fi
+
+    # One read answers all three questions that decide the outcome: is the repo
+    # reachable, is it archived (the API refuses to edit those) and is the
+    # setting already on. Repos coming from -f/stdin were never filtered by the
+    # listing, so this check cannot be skipped.
+    local state
+    if ! state=$(gh api "repos/$slug" --jq '"\(.archived) \(.delete_branch_on_merge)"' 2>/dev/null); then
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "cannot read repo (404 or no access)"
+        return
+    fi
+    local archived="${state%% *}" enabled="${state##* }"
+
+    if [[ "$archived" == "true" ]]; then
+        print_row "KEEP" "$slug" "archived - read-only, cannot be changed"
+        return
+    fi
+
+    if [[ "$enabled" == "true" ]]; then
+        print_row "HAVE" "$slug" "already deletes merged branches"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        print_row "DRY" "$slug" "would enable automatic branch deletion"
+        return
+    fi
+
+    local out
+    if out=$(gh repo edit "$slug" --delete-branch-on-merge=true 2>&1); then
+        print_row "OK" "$slug" "merged branches will be deleted automatically"
+    else
+        FAILED=$((FAILED + 1)); print_row "FAIL" "$slug" "$(echo "$out" | head -n 1)"
+    fi
+
+    # Only actual writes count against the secondary rate limit, so the pause
+    # sits here and not on the paths that return early.
+    [[ "$THROTTLE" != "0" ]] && sleep "$THROTTLE"
+    return 0
+}
+
+[[ "$DRY_RUN" == "1" ]] && echo "${C_YELLOW}== DRY RUN - nothing will be changed ==${C_RESET}"
+
+validate_input_source
+start_log
+
+FAILED=0
+while read -r url; do
+    enable_auto_delete "$url"
+done < <(input_source "isArchived,deleteBranchOnMerge" \
+    ".isArchived==false and .deleteBranchOnMerge==false" \
+    "(archived and already-enabled excluded)" \
+    | normalize_input)
+
+# Exit 1 when the repo listing failed or any repo ended in a FAIL row
+# (useful for chaining and CI).
+if input_source_failed; then
+    echo "ERROR: could not list repositories - nothing was processed" >&2
+    exit 1
+fi
+[[ "$FAILED" -gt 0 ]] && exit 1
+exit 0
