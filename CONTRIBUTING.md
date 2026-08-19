@@ -90,6 +90,14 @@ scripts.
 - Write scripts must support `DRY_RUN=1` and `--dry-run` to preview actions.
   Normalize the env var through the shared `normalize_dry_run` - every value
   except an explicit off (`0`, `false`, `no`, `off`, empty) enables dry-run
+- Write scripts that mutate hundreds of repos in one run must pace their
+  writes. GitHub caps REST mutations with a secondary rate limit of roughly 80
+  per minute; the resulting 403 carries no `retry-after` header and leaves
+  `x-ratelimit-remaining` untouched, so it reads as a hard error mid-run.
+  `github-enable-delete-branch-on-merge` waits `THROTTLE` seconds (default: 1)
+  after each ACTUAL write - never after reads, dry runs or repos left
+  untouched. Validate the value before the loop: a non-numeric `THROTTLE`
+  would fail once per repo
 - Flag values are validated with the shared `require_value`, which rejects a
   missing value AND one that looks like another flag (`-u -F` must not set the
   username to `-F`)
